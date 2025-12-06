@@ -57,7 +57,9 @@ export interface ProjectSettings {
   // Compiler
   autoCompile: boolean;
   enableOptimization: boolean;
-  evmVersion: 'cancun' | 'shanghai' | 'paris';
+  // Casper-specific
+  network: 'testnet' | 'mainnet' | 'nctl' | 'local';
+  wasmOptimization: boolean;
 }
 
 export interface GitCommit {
@@ -74,4 +76,58 @@ export interface GitState {
     stagedFiles: string[];
     commits: GitCommit[];
     branch: string;
+}
+
+// Casper-specific types
+export interface DeployedContract {
+    id: string;
+    name: string;
+    contractHash: string;
+    deployHash: string;
+    network: string;
+    timestamp: number;
+    entryPoints?: EntryPoint[];
+}
+
+export interface EntryPoint {
+    name: string;
+    args: EntryPointArg[];
+    access: 'Public' | 'Group';
+    ret: string;
+}
+
+export interface EntryPointArg {
+    name: string;
+    type: string;
+    value?: any;
+}
+
+export interface CompilationResult {
+    success: boolean;
+    wasm?: Uint8Array;
+    wasmBase64?: string;
+    errors?: string[];
+    warnings?: string[];
+    metadata?: ContractMetadata;
+}
+
+export interface ContractMetadata {
+    entryPoints: EntryPoint[];
+    contractType: string;
+    contractPackage?: string;
+}
+
+export interface WalletConnection {
+    type: 'casper-wallet' | 'ledger' | 'casper-signer' | 'none';
+    publicKey?: string;
+    address?: string;
+    connected: boolean;
+}
+
+export interface DeployConfig {
+    paymentAmount: number;
+    gasPrice: number;
+    ttl?: number;
+    chainName?: string;
+    runtimeArgs?: Record<string, any>;
 }

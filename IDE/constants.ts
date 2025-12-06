@@ -7,7 +7,8 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   tabSize: 4,
   autoCompile: false,
   enableOptimization: true,
-  evmVersion: 'cancun'
+  network: 'testnet',
+  wasmOptimization: true
 };
 
 export const INITIAL_FILES: FileNode[] = [

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { PlusIcon, GridIcon, SunIcon, MoonIcon, LayoutSidebarLeftIcon, LayoutSidebarRightIcon, LayoutPanelBottomIcon, DownloadIcon, EditIcon } from '../UI/Icons';
+import { PlusIcon, GridIcon, SunIcon, MoonIcon, LayoutSidebarLeftIcon, LayoutSidebarRightIcon, LayoutPanelBottomIcon, DownloadIcon, EditIcon, UploadIcon } from '../UI/Icons';
 import logo from '../../logo.svg';
 
 interface HeaderProps {
@@ -10,6 +10,7 @@ interface HeaderProps {
   onCreateWorkspace: () => void;
   onRenameWorkspace: () => void;
   onDownloadWorkspace: () => void;
+  onImportWorkspace: () => void;
   theme: 'dark' | 'light';
   toggleTheme: () => void;
   isLeftSidebarVisible: boolean;
@@ -27,6 +28,7 @@ const Header: React.FC<HeaderProps> = ({
   onCreateWorkspace,
   onRenameWorkspace,
   onDownloadWorkspace,
+  onImportWorkspace,
   theme,
   toggleTheme,
   isLeftSidebarVisible,
@@ -78,6 +80,15 @@ const Header: React.FC<HeaderProps> = ({
                 title="Create New Workspace"
               >
                   <PlusIcon className="w-4 h-4" />
+              </button>
+              
+               {/* Import Workspace */}
+              <button 
+                onClick={onImportWorkspace} 
+                className="bg-caspier-dark border border-caspier-border text-caspier-muted hover:text-caspier-red hover:border-caspier-red transition-all p-1.5 rounded-sm active:translate-y-[1px]" 
+                title="Import Workspace"
+              >
+                  <UploadIcon className="w-4 h-4" />
               </button>
               
                {/* Download Workspace */}

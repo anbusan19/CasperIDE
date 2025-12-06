@@ -1,13 +1,16 @@
 
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { FileNode, ActivityView, ProjectSettings, GitState, GitCommit } from '../../types';
+import { FileNode, ActivityView, ProjectSettings, GitState, GitCommit, WalletConnection, CompilationResult, DeployedContract } from '../../types';
 import { 
   FolderIcon, FileIcon, ChevronRightIcon, ChevronDownIcon, 
   FilePlusIcon, FolderPlusIcon, EditIcon, TrashIcon, CheckIcon, XIcon,
   UndoIcon, RedoIcon, SearchIcon, SettingsIcon, GitIcon, PlusIcon, MinusIcon, RefreshIcon, SmartFileIcon, RocketIcon
 } from '../UI/Icons';
 import { Button } from '../UI/Button';
+import DeployPanel from '../Deploy/DeployPanel';
+import DebugPanel from '../Layout/DebugPanel';
+import { TEMPLATES, templateToFileNodes } from '../../services/templates';
 
 interface SidebarLeftProps {
   files: FileNode[];
@@ -29,6 +32,12 @@ interface SidebarLeftProps {
   onUnstageFile?: (id: string) => void;
   onCommit?: (message: string) => void;
   onPush?: () => void;
+  wallet?: WalletConnection;
+  onWalletConnect?: (wallet: WalletConnection) => void;
+  onWalletDisconnect?: () => void;
+  compilationResult?: CompilationResult;
+  onDeploySuccess?: (contract: DeployedContract) => void;
+  onLoadTemplate?: (nodes: FileNode[]) => void;
 }
 
 interface FileTreeItemProps {
@@ -256,7 +265,9 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
     onCreateNode, onRenameNode, onDeleteNode, width,
     onUndo, onRedo, canUndo, canRedo,
     settings, onUpdateSettings,
-    gitState, onStageFile, onUnstageFile, onCommit, onPush
+    gitState, onStageFile, onUnstageFile, onCommit, onPush,
+    wallet, onWalletConnect, onWalletDisconnect, compilationResult, onDeploySuccess,
+    onLoadTemplate
 }) => {
   // Explorer State
   const [creatingInNodeId, setCreatingInNodeId] = useState<string | null>(null);
@@ -385,6 +396,14 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
 
   // --- Render Views ---
 
+  const handleLoadTemplate = (templateId: string) => {
+    const template = TEMPLATES.find(t => t.id === templateId);
+    if (!template || !onLoadTemplate) return;
+    
+    const nodes = templateToFileNodes(template);
+    onLoadTemplate(nodes);
+  };
+
   const renderExplorer = () => (
     <>
       <div className="p-3 border-b border-caspier-border flex justify-between items-center bg-caspier-black">
@@ -426,6 +445,25 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
              </button>
         </div>
       </div>
+      
+      {/* Templates Section */}
+      {onLoadTemplate && (
+        <div className="p-3 border-b border-caspier-border bg-caspier-black">
+          <div className="text-xs font-bold text-caspier-muted mb-2 uppercase">Examples</div>
+          <div className="space-y-2">
+            {TEMPLATES.map(template => (
+              <button
+                key={template.id}
+                onClick={() => handleLoadTemplate(template.id)}
+                className="w-full text-left p-2 bg-caspier-dark hover:bg-caspier-hover border border-caspier-border rounded text-xs"
+              >
+                <div className="text-caspier-text font-bold">{template.name}</div>
+                <div className="text-caspier-muted text-xs mt-1">{template.description}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       
       <div className="flex-1 overflow-y-auto py-2">
          {files.map(node => (
@@ -779,63 +817,32 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
       );
   }
   
-  const renderDeploy = () => (
-    <div className="flex flex-col h-full">
-        <div className="p-3 border-b border-caspier-border flex items-center gap-2 bg-caspier-black">
-             <RocketIcon className="w-4 h-4 text-caspier-muted" />
-             <span className="text-xs font-bold text-caspier-text tracking-wider">DEPLOY & RUN TRANSACTIONS</span>
+  const renderDeploy = () => {
+    if (!wallet || !onWalletConnect || !onWalletDisconnect) {
+      return (
+        <div className="flex flex-col h-full">
+          <div className="p-3 border-b border-caspier-border flex items-center gap-2 bg-caspier-black">
+            <RocketIcon className="w-4 h-4 text-caspier-muted" />
+            <span className="text-xs font-bold text-caspier-text tracking-wider">DEPLOY & RUN TRANSACTIONS</span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="text-caspier-muted text-sm">Deploy panel requires wallet integration.</div>
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <InputGroup label="Environment">
-                <select className="w-full bg-caspier-black border border-caspier-border text-caspier-text px-2 py-1.5 text-sm focus:border-caspier-red outline-none">
-                    <option>Casper Testnet (CSPR)</option>
-                    <option>NCTL (Local Network)</option>
-                    <option>Injected - Casper Wallet</option>
-                </select>
-            </InputGroup>
+      );
+    }
 
-            <InputGroup label="Account">
-                <select className="w-full bg-caspier-black border border-caspier-border text-caspier-text px-2 py-1.5 text-sm focus:border-caspier-red outline-none">
-                    <option>01...34a (1000 CSPR)</option>
-                    <option>02...89b (500 CSPR)</option>
-                </select>
-            </InputGroup>
-
-            <div className="flex gap-2">
-                 <div className="flex-1">
-                    <InputGroup label="Payment Amount">
-                        <input type="number" defaultValue={5000000000} className="w-full bg-caspier-black border border-caspier-border text-caspier-text px-2 py-1.5 text-sm focus:border-caspier-red outline-none"/>
-                    </InputGroup>
-                 </div>
-                 <div className="flex-1">
-                    <InputGroup label="Gas Price">
-                        <div className="flex">
-                            <input type="number" defaultValue={1} className="w-full bg-caspier-black border border-caspier-border text-caspier-text px-2 py-1.5 text-sm focus:border-caspier-red outline-none border-r-0"/>
-                            <span className="bg-caspier-dark border border-caspier-border text-caspier-muted text-xs flex items-center px-2">motes</span>
-                        </div>
-                    </InputGroup>
-                 </div>
-            </div>
-
-            <InputGroup label="Contract">
-                <select className="w-full bg-caspier-black border border-caspier-border text-caspier-text px-2 py-1.5 text-sm focus:border-caspier-red outline-none">
-                    {findRustFiles(files).map(f => (
-                         <option key={f.id} value={f.name}>{f.name.replace('.rs', '')} - {f.name}</option>
-                    )) || <option>main - main.rs</option>}
-                </select>
-            </InputGroup>
-
-            <Button className="w-full" onClick={() => alert("Deployment not implemented in UI demo.")}>
-                Deploy
-            </Button>
-
-            <div className="pt-4 border-t border-caspier-border mt-4">
-                 <div className="text-xs font-bold text-caspier-muted mb-2 uppercase">Deployed Contracts</div>
-                 <div className="text-caspier-muted text-xs italic">No contracts deployed yet.</div>
-            </div>
-        </div>
-    </div>
-  );
+    return (
+      <DeployPanel
+        files={files}
+        wallet={wallet}
+        onWalletConnect={onWalletConnect}
+        onWalletDisconnect={onWalletDisconnect}
+        compilationResult={compilationResult}
+        onDeploySuccess={onDeploySuccess}
+      />
+    );
+  };
 
   const renderSettings = () => {
       if (!settings || !onUpdateSettings) return null;
@@ -932,6 +939,7 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
         case ActivityView.SEARCH: return renderSearch();
         case ActivityView.GIT: return renderGit();
         case ActivityView.DEPLOY: return renderDeploy();
+        case ActivityView.DEBUG: return <DebugPanel compilationResult={compilationResult} />;
         case ActivityView.SETTINGS: return renderSettings();
         default: return renderPlaceholder();
     }

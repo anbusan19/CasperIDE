@@ -16,6 +16,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ code, language, onChange, readO
 
   useEffect(() => {
     if (monaco) {
+      // Register additional language features
+      monaco.languages.register({ id: 'rust' });
+      monaco.languages.register({ id: 'typescript' });
+      monaco.languages.register({ id: 'toml' });
+      
       // Define Dark Theme
       monaco.editor.defineTheme('caspier-dark', {
         base: 'vs-dark',
@@ -68,9 +73,17 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ code, language, onChange, readO
   }, [monaco, theme]);
 
   const mapLanguage = (lang: string) => {
+    // Casper contract languages
+    if (lang === 'rust' || lang === 'rs') return 'rust';
+    if (lang === 'typescript' || lang === 'ts' || lang === 'assemblyscript' || lang === 'as') return 'typescript';
+    // Other languages
     if (lang === 'sol' || lang === 'solidity') return 'sol';
     if (lang === 'js' || lang === 'javascript') return 'javascript';
-    if (lang === 'ts' || lang === 'typescript') return 'typescript';
+    if (lang === 'toml') return 'toml';
+    if (lang === 'makefile') return 'makefile';
+    if (lang === 'json') return 'json';
+    if (lang === 'markdown' || lang === 'md') return 'markdown';
+    if (lang === 'plaintext' || lang === 'txt') return 'plaintext';
     return lang;
   };
 

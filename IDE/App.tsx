@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileNode, ActivityView, TerminalLine, ProjectSettings, GitState, GitCommit, Problem } from './types';
+import { FileNode, ActivityView, TerminalLine, ProjectSettings, GitState, GitCommit, Problem, WalletConnection, CompilationResult, DeployedContract } from './types';
 import { INITIAL_FILES, DEFAULT_SETTINGS } from './constants';
 import ActivityBar from './components/Layout/ActivityBar';
 import SidebarLeft from './components/Layout/SidebarLeft';
@@ -12,6 +12,8 @@ import EditorTabs from './components/Layout/EditorTabs';
 import Header from './components/Layout/Header';
 import { Button } from './components/UI/Button';
 import { PlayIcon, BotIcon, RocketIcon } from './components/UI/Icons';
+import { RustCompiler, AssemblyScriptCompiler } from './services/casper/compiler';
+import { WalletService } from './services/casper/wallet';
 import JSZip from 'jszip';
 
 function App() {
@@ -47,6 +49,14 @@ function App() {
   ]);
   const [outputLines, setOutputLines] = useState<string[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
+
+  // Compilation & Deployment State
+  const [compilationResult, setCompilationResult] = useState<CompilationResult | undefined>();
+  const [wallet, setWallet] = useState<WalletConnection>({
+    type: 'none',
+    connected: false
+  });
+  const [deployedContracts, setDeployedContracts] = useState<DeployedContract[]>([]);
 
   // Project Settings
   const [settings, setSettings] = useState<ProjectSettings>(DEFAULT_SETTINGS);
@@ -290,6 +300,101 @@ function App() {
     }
   };
 
+  const handleImportWorkspace = async () => {
+    try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.zip';
+        input.onchange = async (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+
+            const zip = new JSZip();
+            const zipContent = await zip.loadAsync(file);
+            
+            // Convert zip to FileNode structure
+            const fileNodes: FileNode[] = [];
+            const nodeMap: Record<string, FileNode> = {};
+            
+            // Process all files in zip
+            for (const [path, zipEntry] of Object.entries(zipContent.files)) {
+                if (zipEntry.dir) continue;
+                
+                const parts = path.split('/').filter(p => p);
+                const content = await zipEntry.async('string');
+                
+                // Build file tree
+                let currentPath = '';
+                for (let i = 0; i < parts.length; i++) {
+                    const part = parts[i];
+                    const isFile = i === parts.length - 1;
+                    const pathKey = currentPath ? `${currentPath}/${part}` : part;
+                    
+                    if (!nodeMap[pathKey]) {
+                        const extension = isFile ? part.split('.').pop()?.toLowerCase() : undefined;
+                        const language = isFile ? getLanguageFromExtension(extension || '') : undefined;
+                        
+                        const node: FileNode = {
+                            id: `${activeWorkspace}-${pathKey}-${Date.now()}`,
+                            name: part,
+                            type: isFile ? 'file' : 'folder',
+                            content: isFile ? content : undefined,
+                            language,
+                            children: isFile ? undefined : []
+                        };
+                        
+                        nodeMap[pathKey] = node;
+                        
+                        if (i === 0) {
+                            fileNodes.push(node);
+                        } else {
+                            const parentPath = parts.slice(0, i).join('/');
+                            const parent = nodeMap[parentPath];
+                            if (parent && parent.children) {
+                                parent.children.push(node);
+                            }
+                        }
+                    }
+                    
+                    currentPath = pathKey;
+                }
+            }
+            
+            if (fileNodes.length > 0) {
+                setHistory([fileNodes]);
+                setHistoryIndex(0);
+                setOpenFiles([]);
+                setActiveFileId(null);
+                setTerminalLines(prev => [
+                    ...prev,
+                    { id: Date.now().toString(), type: 'success', content: `Workspace imported successfully.` }
+                ]);
+            }
+        };
+        input.click();
+    } catch (error) {
+        console.error("Import failed:", error);
+        setTerminalLines(prev => [
+            ...prev,
+            { id: Date.now().toString(), type: 'error', content: `Failed to import workspace: ${error}` }
+        ]);
+    }
+  };
+
+  const getLanguageFromExtension = (ext: string): string => {
+    const langMap: Record<string, string> = {
+      'rs': 'rust',
+      'ts': 'typescript',
+      'as': 'typescript',
+      'toml': 'toml',
+      'json': 'json',
+      'md': 'markdown',
+      'txt': 'plaintext',
+      'makefile': 'makefile'
+    };
+    return langMap[ext] || 'plaintext';
+  };
+
   // --- History Management ---
 
   const addToHistory = (newFiles: FileNode[]) => {
@@ -349,52 +454,87 @@ function App() {
       });
   };
   
-  const handleCompile = () => {
+  const handleCompile = async () => {
       if (!activeFileId) return;
       const file = findFile(files, activeFileId);
-      const fileName = file ? file.name : activeFileId;
+      if (!file || file.type !== 'file') return;
+      
+      const fileName = file.name;
+      const sourceCode = file.content || activeContent;
 
       setTerminalLines(prev => [
           ...prev,
-          { id: Date.now().toString(), type: 'command', content: `cargo build --release -p ${fileName}` },
+          { id: Date.now().toString(), type: 'command', content: `Compiling ${fileName}...` },
       ]);
       
-      // Simulate Compiler Output
       setOutputLines([
           `> Compiling ${fileName}...`,
           `> Optimization: ${settings.enableOptimization ? 'Enabled' : 'Disabled'}`,
           `> Compiler starting...`
       ]);
 
-      setProblems([]); // Clear previous problems
+      setProblems([]);
+      setCompilationResult(undefined);
 
-      setTimeout(() => {
-          // Simulate randomized success/failure for demo purposes
-          const hasError = Math.random() > 0.7;
+      try {
+          let result: CompilationResult;
 
-          if (hasError) {
-             setTerminalLines(prev => [
+          if (file.language === 'rust' || fileName.endsWith('.rs')) {
+              result = await RustCompiler.compile(sourceCode, fileName.replace('.rs', ''), settings.enableOptimization);
+          } else if (file.language === 'typescript' || fileName.endsWith('.ts') || fileName.endsWith('.as')) {
+              result = await AssemblyScriptCompiler.compile(sourceCode, fileName.replace(/\.(ts|as)$/, ''), settings.enableOptimization);
+          } else {
+              throw new Error(`Unsupported file type: ${fileName}`);
+          }
+
+          setCompilationResult(result);
+
+          if (result.success) {
+              setTerminalLines(prev => [
+                  ...prev,
+                  { id: Date.now().toString(), type: 'success', content: 'Compilation successful! WASM generated.' },
+              ]);
+              setOutputLines(prev => [...prev, `> Compilation completed successfully.`, `> WASM size: ${result.wasm?.length || 0} bytes`]);
+              
+              if (result.metadata?.entryPoints) {
+                  setOutputLines(prev => [...prev, `> Entry points: ${result.metadata.entryPoints.map(ep => ep.name).join(', ')}`]);
+              }
+          } else {
+              setTerminalLines(prev => [
                   ...prev,
                   { id: Date.now().toString(), type: 'error', content: 'Compilation failed. See Output and Problems for details.' },
               ]);
-             setOutputLines(prev => [...prev, `Error: Compilation failed with 1 error.`]);
-             setProblems([{
-                 id: Date.now().toString(),
-                 file: fileName,
-                 description: 'Identifier not found or not unique',
-                 line: 12,
-                 column: 4,
-                 severity: 'error'
-             }]);
-             if (!isTerminalVisible) setIsTerminalVisible(true);
-          } else {
-             setTerminalLines(prev => [
-                  ...prev,
-                  { id: Date.now().toString(), type: 'success', content: 'Compilation successful!' },
-              ]);
-             setOutputLines(prev => [...prev, `> Compilation completed successfully.`]);
+              setOutputLines(prev => [...prev, `Error: Compilation failed.`, ...(result.errors || []).map(e => `  - ${e}`)]);
+              
+              if (result.errors) {
+                  const fileProblems: Problem[] = result.errors.map((error, idx) => ({
+                      id: `${Date.now()}-${idx}`,
+                      file: fileName,
+                      description: error,
+                      line: 1,
+                      column: 1,
+                      severity: 'error'
+                  }));
+                  setProblems(fileProblems);
+              }
+              
+              if (!isTerminalVisible) setIsTerminalVisible(true);
           }
-      }, 1000);
+      } catch (error: any) {
+          setTerminalLines(prev => [
+              ...prev,
+              { id: Date.now().toString(), type: 'error', content: `Compilation error: ${error.message}` },
+          ]);
+          setOutputLines(prev => [...prev, `Error: ${error.message}`]);
+          setProblems([{
+              id: Date.now().toString(),
+              file: fileName,
+              description: error.message,
+              line: 1,
+              column: 1,
+              severity: 'error'
+          }]);
+      }
   };
 
   // --- Git Operations ---
@@ -457,6 +597,42 @@ function App() {
   const handleDeployView = () => {
       setActiveView(ActivityView.DEPLOY);
       if (!isLeftSidebarVisible) toggleLeftSidebar();
+  };
+
+  const handleWalletConnect = (newWallet: WalletConnection) => {
+      setWallet(newWallet);
+      setTerminalLines(prev => [
+          ...prev,
+          { id: Date.now().toString(), type: 'success', content: `Wallet connected: ${newWallet.type}` },
+      ]);
+  };
+
+  const handleWalletDisconnect = () => {
+      setWallet({ type: 'none', connected: false });
+      setTerminalLines(prev => [
+          ...prev,
+          { id: Date.now().toString(), type: 'info', content: 'Wallet disconnected' },
+      ]);
+  };
+
+  const handleDeploySuccess = (contract: DeployedContract) => {
+      setDeployedContracts(prev => [contract, ...prev]);
+      setTerminalLines(prev => [
+          ...prev,
+          { id: Date.now().toString(), type: 'success', content: `Contract deployed: ${contract.deployHash}` },
+      ]);
+  };
+
+  const handleLoadTemplate = (templateNodes: FileNode[]) => {
+      // Replace current files with template
+      setHistory([templateNodes]);
+      setHistoryIndex(0);
+      setOpenFiles([]);
+      setActiveFileId(null);
+      setTerminalLines(prev => [
+          ...prev,
+          { id: Date.now().toString(), type: 'info', content: 'Template loaded successfully' },
+      ]);
   };
 
   // --- Tab Management ---
@@ -584,6 +760,7 @@ function App() {
             onCreateWorkspace={handleCreateWorkspace}
             onRenameWorkspace={handleRenameWorkspace}
             onDownloadWorkspace={handleDownloadWorkspace}
+            onImportWorkspace={handleImportWorkspace}
             theme={theme}
             toggleTheme={toggleTheme}
             isLeftSidebarVisible={isLeftSidebarVisible}
@@ -625,6 +802,12 @@ function App() {
                         onUnstageFile={handleUnstageFile}
                         onCommit={handleCommit}
                         onPush={handlePush}
+                        wallet={wallet}
+                        onWalletConnect={handleWalletConnect}
+                        onWalletDisconnect={handleWalletDisconnect}
+                        compilationResult={compilationResult}
+                        onDeploySuccess={handleDeploySuccess}
+                        onLoadTemplate={handleLoadTemplate}
                     />
                     {/* Left Resizer */}
                     <div 
