@@ -108,6 +108,7 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
 
       alert(`Deploy successful! Hash: ${result.deployHash}`);
     } catch (error: any) {
+      console.error('Deployment error:', error);
       alert(`Deployment failed: ${error.message}`);
     } finally {
       setDeploying(false);

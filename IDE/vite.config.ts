@@ -8,6 +8,20 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        proxy: {
+          '/casper-rpc': {
+            target: 'https://rpc.testnet.casperlabs.io',
+            changeOrigin: true,
+            secure: false,
+            rewrite: (path) => path.replace(/^\/casper-rpc/, '')
+          },
+          '/casper-node-rpc': {
+            target: 'https://node-clarity-testnet.make.services',
+            changeOrigin: true,
+            secure: false,
+            rewrite: (path) => path.replace(/^\/casper-node-rpc/, '')
+          }
+        }
       },
       plugins: [react()],
       define: {

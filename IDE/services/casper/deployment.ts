@@ -26,7 +26,23 @@ export class CasperDeploymentService {
         throw new Error('Wallet not connected');
       }
 
-      const client = new CasperClient(this.NETWORKS[config.chainName as keyof typeof this.NETWORKS] || this.NETWORKS.testnet);
+      // Define fallback nodes (using local proxy to bypass CORS)
+      const testnetNodes = [
+        '/casper-rpc',
+        '/casper-node-rpc',
+        'http://159.65.203.12:7777/rpc' // Non-SSL usually has lenient CORS
+      ];
+
+      const mainnetNodes = [
+        'https://node-clarity-mainnet.make.services/rpc',
+        'https://rpc.mainnet.casperlabs.io/rpc'
+      ];
+
+      const targetNetwork = config.chainName === 'casper' ? 'mainnet' : 'testnet';
+      const nodes = targetNetwork === 'mainnet' ? mainnetNodes : testnetNodes;
+
+      // Construct deploy params using the primary node for now (DeployParams doesn't depend on live node)
+      // But for putDeploy we need a working client.
 
       // Build runtime args
       const runtimeArgs = await this.buildRuntimeArgs(config.runtimeArgs || {});
@@ -47,20 +63,36 @@ export class CasperDeploymentService {
       );
 
       // Sign deploy with wallet
-      const { WalletService } = await import('./wallet');
-      const signedDeploy = await WalletService.signDeploy(deploy, wallet);
+      const { CasperWalletService } = await import('./casper-wallet-service');
+      const signedDeploy = await CasperWalletService.signDeploy(deploy, wallet);
 
-      // Send deploy to network
+      // Send deploy to network with fallback
       const deployHash = signedDeploy.hash;
-      const deployResult = await client.putDeploy(signedDeploy);
+      let deployResult;
+      let lastError;
+
+      for (const nodeUrl of nodes) {
+        try {
+          console.log(`Attempting to send deploy to ${nodeUrl}...`);
+          const client = new CasperClient(nodeUrl);
+          deployResult = await client.putDeploy(signedDeploy);
+          if (deployResult) {
+            console.log(`Successfully sent to ${nodeUrl}`);
+            break;
+          }
+        } catch (err: any) {
+          console.warn(`Failed to send to ${nodeUrl}:`, err.message);
+          lastError = err;
+        }
+      }
 
       if (!deployResult) {
-        throw new Error('Failed to send deploy to network');
+        throw new Error(`Failed to send deploy to network. Last error: ${lastError?.message || 'Unknown error'}`);
       }
 
       return {
         deployHash,
-        contractHash: undefined // Will be available after deploy processing
+        contractHash: undefined
       };
     } catch (error: any) {
       throw new Error(`Deployment failed: ${error.message}`);

@@ -9,14 +9,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
     "@google/genai": "^1.30.0",
+    "@make-software/csprclick-core-client": "^1.11.0",
+    "@make-software/csprclick-ui": "^1.12.0",
     "@monaco-editor/react": "^4.7.0",
-    "jszip": "^3.10.1",
-    "casper-js-sdk": "^2.7.1",
     "assemblyscript": "^0.27.0",
-    "monaco-editor": "^0.45.0"
+    "casper-js-sdk": "^2.7.1",
+    "jszip": "^3.10.1",
+    "monaco-editor": "^0.45.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

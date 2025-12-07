@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { WalletConnection } from '../../types';
-import { WalletService } from '../../services/casper/wallet';
+import { CasperWalletService } from '../../services/casper/casper-wallet-service';
 import { Button } from '../UI/Button';
 import { XIcon, CheckIcon } from '../UI/Icons';
 
@@ -20,17 +20,31 @@ const WalletConnectionComponent: React.FC<WalletConnectionProps> = ({
   const [balance, setBalance] = useState<number | null>(null);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualPublicKey, setManualPublicKey] = useState('');
-  const [walletAvailable, setWalletAvailable] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>({});
 
   const loadBalance = useCallback(async () => {
     if (!wallet.publicKey) return;
     try {
-      const bal = await WalletService.getBalance(wallet.publicKey, 'testnet');
+      const bal = await CasperWalletService.getBalance(wallet.publicKey, 'testnet');
       setBalance(bal);
     } catch (err) {
       console.error('Failed to load balance:', err);
     }
   }, [wallet.publicKey]);
+
+  useEffect(() => {
+    const updateDebug = () => {
+      setDebugInfo({
+        hasWindow: typeof window !== 'undefined',
+        hasProvider: typeof window !== 'undefined' && !!(window as any).CasperWalletProvider,
+        timestamp: new Date().toISOString()
+      });
+    };
+
+    updateDebug();
+    const interval = setInterval(updateDebug, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (wallet.connected && wallet.publicKey) {
@@ -40,64 +54,12 @@ const WalletConnectionComponent: React.FC<WalletConnectionProps> = ({
     }
   }, [wallet.connected, wallet.publicKey, loadBalance]);
 
-  // Check for wallet availability on mount and periodically
-  useEffect(() => {
-    const checkWallet = () => {
-      const available = WalletService.isCasperWalletAvailable();
-      setWalletAvailable(available);
-      
-      if (available) {
-        const availableWallets = WalletService.getAvailableWallets();
-        console.log('Available wallets:', availableWallets);
-      }
-    };
-
-    // Check immediately
-    checkWallet();
-
-    // Check periodically in case extension loads after page
-    const interval = setInterval(checkWallet, 2000);
-
-    // Also listen for storage events (some extensions use this)
-    window.addEventListener('storage', checkWallet);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('storage', checkWallet);
-    };
-  }, []);
-
-  const handleConnect = async (type: 'casper-wallet' | 'casper-signer' | 'ledger') => {
+  const handleConnect = async () => {
     setConnecting(true);
     setError(null);
 
     try {
-      // Check if wallet is available before attempting connection
-      if (type === 'casper-wallet' && !WalletService.isCasperWalletAvailable()) {
-        const availableWallets = WalletService.getAvailableWallets();
-        if (availableWallets.length === 0) {
-          setError('Casper Wallet extension not detected. Please install it from the Chrome Web Store or use manual public key entry.');
-          setConnecting(false);
-          return;
-        }
-      }
-
-      let connection: WalletConnection;
-
-      switch (type) {
-        case 'casper-wallet':
-          connection = await WalletService.connectCasperWallet();
-          break;
-        case 'casper-signer':
-          connection = await WalletService.connectCasperSigner();
-          break;
-        case 'ledger':
-          connection = await WalletService.connectLedger();
-          break;
-        default:
-          throw new Error('Unknown wallet type');
-      }
-
+      const connection = await CasperWalletService.connect();
       onConnect(connection);
     } catch (err: any) {
       console.error('Wallet connection error:', err);
@@ -107,7 +69,8 @@ const WalletConnectionComponent: React.FC<WalletConnectionProps> = ({
     }
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    await CasperWalletService.disconnect();
     onDisconnect();
     setBalance(null);
     setError(null);
@@ -117,7 +80,17 @@ const WalletConnectionComponent: React.FC<WalletConnectionProps> = ({
 
   const handleManualConnect = () => {
     try {
-      const connection = WalletService.connectWithPublicKey(manualPublicKey.trim());
+      if (!/^[0-9a-fA-F]+$/.test(manualPublicKey.trim())) {
+        throw new Error('Invalid public key format. Must be hexadecimal.');
+      }
+
+      const connection: WalletConnection = {
+        type: 'casper-wallet',
+        publicKey: manualPublicKey.trim(),
+        address: manualPublicKey.trim(),
+        connected: true
+      };
+
       onConnect(connection);
       setShowManualEntry(false);
       setManualPublicKey('');
@@ -162,6 +135,12 @@ const WalletConnectionComponent: React.FC<WalletConnectionProps> = ({
 
   return (
     <div className="space-y-3">
+      {/* DEBUG PANEL */}
+      <div className="p-2 bg-gray-900 text-xs font-mono text-gray-400 border border-gray-700 rounded hidden">
+        <div>DEBUG:</div>
+        <div>window.CasperWalletProvider: {debugInfo.hasProvider ? '✅ FOUND' : '❌ MISSING'}</div>
+      </div>
+
       {error && (
         <div className="p-3 bg-red-900/20 border border-red-700 rounded text-sm text-red-400">
           {error}
@@ -169,37 +148,19 @@ const WalletConnectionComponent: React.FC<WalletConnectionProps> = ({
       )}
 
       <div className="space-y-2">
-        {!walletAvailable && (
+        {!debugInfo.hasProvider && (
           <div className="p-2 bg-yellow-900/20 border border-yellow-700 rounded text-xs text-yellow-400">
-            ⚠️ Casper Wallet extension not detected. Install it or use manual entry below.
+            ⚠️ Casper Wallet extension not detected on window.CasperWalletProvider
           </div>
         )}
-        
+
         <Button
-          onClick={() => handleConnect('casper-wallet')}
+          onClick={handleConnect}
           disabled={connecting}
           className="w-full"
           variant="primary"
         >
           {connecting ? 'Connecting...' : 'Connect Casper Wallet'}
-        </Button>
-
-        <Button
-          onClick={() => handleConnect('casper-signer')}
-          disabled={connecting}
-          className="w-full"
-          variant="secondary"
-        >
-          {connecting ? 'Connecting...' : 'Connect Casper Signer (Deprecated)'}
-        </Button>
-
-        <Button
-          onClick={() => handleConnect('ledger')}
-          disabled={connecting}
-          className="w-full"
-          variant="secondary"
-        >
-          {connecting ? 'Connecting...' : 'Connect Ledger'}
         </Button>
 
         {!showManualEntry ? (
@@ -249,37 +210,13 @@ const WalletConnectionComponent: React.FC<WalletConnectionProps> = ({
       </div>
 
       <div className="text-xs text-caspier-muted">
-        <p>Connect a wallet to deploy and interact with contracts.</p>
-        <p className="mt-1">Supported: Casper Wallet (recommended), Casper Signer (deprecated), or enter public key manually</p>
+        <p>Connect your wallet to deploy contracts to Casper network.</p>
         <p className="mt-1 text-yellow-400">
-          Note: Make sure Casper Wallet extension is installed and enabled. 
-          <a 
-            href="https://chrome.google.com/webstore/detail/casper-wallet/ghlpmldmjjhmdgmnhgimccmkbpcnjfji" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-caspier-red hover:underline ml-1"
-          >
-            Install from Chrome Web Store
-          </a>
+          ⚠️ Extension signing required for deployment. Manual entry is read-only.
         </p>
-        {error && error.includes('not found') && (
-          <p className="mt-2 text-xs text-caspier-red">
-            💡 Tip: If the extension is installed, try refreshing the page or use the manual public key entry option below.
-          </p>
-        )}
       </div>
     </div>
   );
 };
 
 export default WalletConnectionComponent;
-
-
-
-
-
-
-
-
-
-
