@@ -1,3 +1,4 @@
+import { CasperClient, CLPublicKey, DeployUtil } from 'casper-js-sdk';
 import { WalletConnection } from '../../types';
 
 /**
@@ -10,11 +11,11 @@ export class WalletService {
    */
   static isCasperWalletAvailable(): boolean {
     if (typeof window === 'undefined') return false;
-    
+
     const casperWallet = (window as any).casperWallet;
     const casperlabsHelper = (window as any).casperlabsHelper;
     const signerHelper = (window as any).signerHelper;
-    
+
     return !!(casperWallet || casperlabsHelper || signerHelper);
   }
 
@@ -23,16 +24,16 @@ export class WalletService {
    */
   static getAvailableWallets(): string[] {
     if (typeof window === 'undefined') return [];
-    
+
     const available: string[] = [];
     const casperWallet = (window as any).casperWallet;
     const casperlabsHelper = (window as any).casperlabsHelper;
     const signerHelper = (window as any).signerHelper;
-    
+
     if (casperWallet) available.push('Casper Wallet');
     if (casperlabsHelper) available.push('Casper Labs Helper (Legacy)');
     if (signerHelper) available.push('Signer Helper');
-    
+
     return available;
   }
 
@@ -41,71 +42,54 @@ export class WalletService {
    */
   static async connectCasperWallet(): Promise<WalletConnection> {
     try {
-      // Check if Casper Wallet extension is installed
       if (typeof window === 'undefined') {
         throw new Error('Window object not available');
       }
 
-      // Try multiple wallet detection methods
-      const casperWallet = (window as any).casperWallet;
+      // Retry mechanism to wait for extension injection
+      const waitForInjection = async (retries = 10, delay = 200): Promise<any> => {
+        for (let i = 0; i < retries; i++) {
+          const cw = (window as any).casperWallet;
+          if (cw) return cw;
+          await new Promise(r => setTimeout(r, delay));
+        }
+        return null;
+      };
+
+      // Wait for wallet to inject
+      const casperWallet = await waitForInjection();
+
       const casperlabsHelper = (window as any).casperlabsHelper;
       const signerHelper = (window as any).signerHelper;
 
-      // Debug: Log what's available
-      console.log('Wallet detection:', {
+      console.log('Wallet detection result:', {
         casperWallet: !!casperWallet,
         casperlabsHelper: !!casperlabsHelper,
-        signerHelper: !!signerHelper,
-        casperWalletMethods: casperWallet ? Object.keys(casperWallet) : [],
-        casperlabsHelperMethods: casperlabsHelper ? Object.keys(casperlabsHelper) : [],
-        signerHelperMethods: signerHelper ? Object.keys(signerHelper) : []
+        signerHelper: !!signerHelper
       });
 
       let publicKey: string | null = null;
 
-      // Try Casper Wallet (newer API - check for various method names)
+      // Try Casper Wallet (Latest Standard)
       if (casperWallet) {
         try {
-          // Try isConnected() first
-          if (typeof casperWallet.isConnected === 'function') {
-            const isConnected = await casperWallet.isConnected();
-            if (isConnected) {
-              // Try different method names for getting public key
-              if (typeof casperWallet.getActivePublicKey === 'function') {
-                publicKey = await casperWallet.getActivePublicKey();
-              } else if (typeof casperWallet.getPublicKey === 'function') {
-                publicKey = await casperWallet.getPublicKey();
-              } else if (typeof casperWallet.getSelectedPublicKey === 'function') {
-                publicKey = await casperWallet.getSelectedPublicKey();
-              }
-            } else {
-              // Request connection
-              if (typeof casperWallet.requestConnection === 'function') {
-                publicKey = await casperWallet.requestConnection();
-              } else if (typeof casperWallet.connect === 'function') {
-                publicKey = await casperWallet.connect();
-              }
-            }
+          // Check if already connected
+          const isConnected = await casperWallet.isConnected();
+          if (isConnected) {
+            publicKey = await casperWallet.getActivePublicKey();
           } else {
-            // Try direct connection methods
-            if (typeof casperWallet.connect === 'function') {
-              publicKey = await casperWallet.connect();
-            } else if (typeof casperWallet.requestConnection === 'function') {
-              publicKey = await casperWallet.requestConnection();
-            } else if (typeof casperWallet.getActivePublicKey === 'function') {
-              publicKey = await casperWallet.getActivePublicKey();
-            }
+            // Request new connection
+            publicKey = await casperWallet.requestConnection();
           }
         } catch (e: any) {
-          console.warn('Casper Wallet connection failed:', e);
-          // If connection was rejected by user, throw a clearer error
-          if (e.message && (e.message.includes('reject') || e.message.includes('denied') || e.message.includes('cancel'))) {
+          console.warn('Casper Wallet connection error:', e);
+          if (e.message?.includes('User rejected')) {
             throw new Error('Connection rejected by user');
           }
         }
       }
 
-      // Try legacy helper (Casper Signer)
+      // Fallback: Legacy Casper Labs Helper
       if (!publicKey && casperlabsHelper) {
         try {
           if (typeof casperlabsHelper.requestConnection === 'function') {
@@ -113,55 +97,28 @@ export class WalletService {
           } else if (typeof casperlabsHelper.getActivePublicKey === 'function') {
             publicKey = await casperlabsHelper.getActivePublicKey();
           }
-        } catch (e: any) {
-          console.warn('Legacy helper connection failed:', e);
-          if (e.message && (e.message.includes('reject') || e.message.includes('denied'))) {
-            throw new Error('Connection rejected by user');
-          }
-        }
+        } catch (e) { console.warn("Legacy helper failed", e); }
       }
 
-      // Try signer helper
       if (!publicKey && signerHelper) {
         try {
-          if (typeof signerHelper.getActivePublicKey === 'function') {
-            publicKey = await signerHelper.getActivePublicKey();
-          } else if (typeof signerHelper.requestConnection === 'function') {
-            publicKey = await signerHelper.requestConnection();
-          }
-        } catch (e: any) {
-          console.warn('Signer helper connection failed:', e);
-        }
+          publicKey = await signerHelper.getActivePublicKey();
+        } catch (e) { console.warn("Signer helper failed", e); }
       }
 
       if (!publicKey) {
-        const availableWallets = this.getAvailableWallets();
-        let errorMessage = 'Casper Wallet extension not found. ';
-        
-        if (availableWallets.length > 0) {
-          errorMessage += `Detected: ${availableWallets.join(', ')}. `;
-          errorMessage += 'The extension may be installed but not connected. Please check the extension and try again, or use manual public key entry.';
-        } else {
-          errorMessage += 'Please install Casper Wallet from the Chrome Web Store (https://chrome.google.com/webstore). ';
-          errorMessage += 'If you have it installed, try refreshing the page or use the manual public key entry option.';
-        }
-        
-        throw new Error(errorMessage);
-      }
-
-      // Validate public key format (should be hex string)
-      if (!/^[0-9a-fA-F]+$/.test(publicKey)) {
-        throw new Error('Invalid public key format received from wallet');
+        throw new Error('Casper Wallet not detected. Try refreshing the page if you have the extension installed.');
       }
 
       return {
         type: 'casper-wallet',
         publicKey,
-        address: publicKey, // In Casper, public key is the address
+        address: publicKey,
         connected: true
       };
+
     } catch (error: any) {
-      throw new Error(`Failed to connect Casper Wallet: ${error.message}`);
+      throw new Error(`Failed to connect wallet: ${error.message}`);
     }
   }
 
@@ -289,24 +246,21 @@ export class WalletService {
         throw new Error('Window object not available');
       }
 
-      const { Keys } = await import('casper-js-sdk');
-      const publicKeyObj = Keys.PublicKey.fromHex(wallet.publicKey);
+      const { CLPublicKey } = await import('casper-js-sdk');
+      const publicKeyObj = CLPublicKey.fromHex(wallet.publicKey);
 
       if (wallet.type === 'casper-wallet') {
         const casperWallet = (window as any).casperWallet;
         const casperlabsHelper = (window as any).casperlabsHelper;
 
-        if (casperWallet && casperWallet.signMessage) {
+        if (casperWallet && casperWallet.sign) {
           // New Casper Wallet API
-          const deployJson = deploy.toJson();
-          const signed = await casperWallet.signMessage(deployJson, wallet.publicKey);
+          const signed = await casperWallet.sign(JSON.stringify(deploy), wallet.publicKey);
           return signed;
         } else if (casperlabsHelper && casperlabsHelper.sign) {
           // Legacy API
           const deployHash = deploy.hash;
           const signature = await casperlabsHelper.sign(deployHash, wallet.publicKey);
-          // Reconstruct deploy with signature
-          const { DeployUtil } = await import('casper-js-sdk');
           return DeployUtil.setSignature(deploy, signature, publicKeyObj);
         } else {
           throw new Error('Casper Wallet signing API not available');
@@ -316,13 +270,11 @@ export class WalletService {
         const casperSigner = (window as any).casperSigner;
 
         if (signerHelper && signerHelper.sign) {
-          const deployJson = deploy.toJson();
-          const signed = await signerHelper.sign(deployJson, wallet.publicKey);
+          const signed = await signerHelper.sign(JSON.stringify(deploy), wallet.publicKey);
           return signed;
         } else if (casperSigner && casperSigner.sign) {
           const deployHash = deploy.hash;
           const signature = await casperSigner.sign(deployHash, wallet.publicKey);
-          const { DeployUtil } = await import('casper-js-sdk');
           return DeployUtil.setSignature(deploy, signature, publicKeyObj);
         } else {
           throw new Error('Casper Signer signing API not available');
@@ -340,8 +292,6 @@ export class WalletService {
    */
   static async getBalance(publicKey: string, network: string = 'testnet'): Promise<number> {
     try {
-      const { CasperClient, Keys } = await import('casper-js-sdk');
-
       const networks = {
         testnet: 'https://node-clarity-testnet.make.services/rpc',
         mainnet: 'https://node-clarity-mainnet.make.services/rpc',
@@ -350,7 +300,7 @@ export class WalletService {
       };
 
       const client = new CasperClient(networks[network as keyof typeof networks] || networks.testnet);
-      const publicKeyObj = Keys.PublicKey.fromHex(publicKey);
+      const publicKeyObj = CLPublicKey.fromHex(publicKey);
       const balance = await client.balanceOfByPublicKey(publicKeyObj);
 
       return balance.toNumber();

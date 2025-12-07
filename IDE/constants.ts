@@ -33,8 +33,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-casper-contract = "1.4.4"
-casper-types = "1.5.0"
+casper-contract = "4.0.0"
+casper-types = "4.0.1"
 
 [lib]
 crate-type = ["cdylib"]`
@@ -45,25 +45,25 @@ crate-type = ["cdylib"]`
             type: 'file',
             language: 'makefile',
             content: `prepare:
-	rustup target add wasm32-unknown-unknown
+\trustup target add wasm32-unknown-unknown
 
 build-contract:
-	cargo build --release -p caspier_contract --target wasm32-unknown-unknown
+\tcargo build --release -p caspier_contract --target wasm32-unknown-unknown
 
 test:
-	cargo test`
+\tcargo test`
           },
           {
             id: 'src',
             name: 'src',
             type: 'folder',
             children: [
-                {
-                    id: 'main.rs',
-                    name: 'main.rs',
-                    type: 'file',
-                    language: 'rust',
-                    content: `#![no_std]
+              {
+                id: 'main.rs',
+                name: 'main.rs',
+                type: 'file',
+                language: 'rust',
+                content: `#![no_std]
 #![no_main]
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -91,7 +91,7 @@ pub extern "C" fn call() {
     
     runtime::print("Caspier contract executed successfully.");
 }`
-                }
+              }
             ]
           }
         ]
@@ -101,12 +101,12 @@ pub extern "C" fn call() {
         name: 'client',
         type: 'folder',
         children: [
-            {
-                id: 'install.ts',
-                name: 'install.ts',
-                type: 'file',
-                language: 'typescript',
-                content: `import { CasperClient, Contracts, RuntimeArgs, CLValueBuilder } from "casper-js-sdk";
+          {
+            id: 'install.ts',
+            name: 'install.ts',
+            type: 'file',
+            language: 'typescript',
+            content: `import { CasperClient, Contracts, RuntimeArgs, CLValueBuilder } from "casper-js-sdk";
 
 const client = new CasperClient("http://localhost:11101/rpc");
 
@@ -118,7 +118,7 @@ async function installContract() {
 }
 
 installContract().catch(console.error);`
-            }
+          }
         ]
       },
       {

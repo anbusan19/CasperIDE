@@ -125,7 +125,7 @@ Casper Web IDE
 ### **1. Clone the repo**
 ```bash
 git clone https://github.com/yourusername/casper-web-ide.git
-cd casper-web-ide
+cd casper-web-ide/IDE
 ```
 
 ### **2. Install dependencies**
@@ -133,12 +133,33 @@ cd casper-web-ide
 npm install
 ```
 
-### **3. Start the development server**
+### **3. Configure environment variables**
+
+Create a `.env` file in the `IDE` folder:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add:
+- **GEMINI_API_KEY** - Your Google Gemini API key (optional, for AI assistant)
+- **VITE_COMPILER_SERVICE_URL** - Your GCP compilation service URL
+
+Example:
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+VITE_COMPILER_SERVICE_URL=http://34.93.123.45:8080
+```
+
+> **Note:** For real Rust compilation, you need to set up a GCP VM with the compilation service.  
+> See [GCP_SETUP.md](./GCP_SETUP.md) for detailed instructions.
+
+### **4. Start the development server**
 ```bash
 npm run dev
 ```
 
-### **4. Open in browser**
+### **5. Open in browser**
 ```
 http://localhost:3000
 ```

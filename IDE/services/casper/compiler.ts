@@ -12,57 +12,55 @@ export class RustCompiler {
     optimize: boolean = true
   ): Promise<CompilationResult> {
     try {
-      // Simulate compilation process
-      // In production, this would use a WebAssembly-based Rust compiler
-      console.log(`Compiling Rust contract: ${contractName}`);
-      
-      // Basic syntax validation
-      const errors: string[] = [];
-      const warnings: string[] = [];
+      console.log(`Compiling Rust contract: ${contractName} on GCP VM...`);
 
-      // Check for required Casper imports
-      if (!sourceCode.includes('casper_contract') && !sourceCode.includes('casper-types')) {
-        warnings.push('Missing Casper contract dependencies. Ensure Cargo.toml includes casper-contract and casper-types.');
+      // Get compiler service URL from environment
+      const compilerUrl = import.meta.env.VITE_COMPILER_SERVICE_URL;
+
+      if (!compilerUrl) {
+        console.warn('VITE_COMPILER_SERVICE_URL not set, falling back to mock compilation');
+        return this.compileMock(sourceCode, contractName, optimize);
       }
 
-      // Check for #[no_mangle] and call() function or entry points
-      const hasNoMangleCall = sourceCode.includes('#[no_mangle]') && 
-        (sourceCode.includes('pub extern "C" fn call()') || sourceCode.includes('fn call()'));
-      const hasEntryPoints = sourceCode.includes('EntryPoints::new()') || sourceCode.includes('EntryPoint::new');
-      
-      if (!hasNoMangleCall && !hasEntryPoints) {
-        errors.push('Contract must have either a #[no_mangle] pub extern "C" fn call() entry point or define EntryPoints');
-      }
-      
-      // Check for wasm32 target
-      if (!sourceCode.includes('#![no_std]')) {
-        warnings.push('Consider adding #![no_std] for WASM compilation');
-      }
-      
-      if (!sourceCode.includes('#![no_main]')) {
-        warnings.push('Consider adding #![no_main] for contract entry points');
-      }
+      // Create FormData with source code
+      const formData = new FormData();
+      const blob = new Blob([sourceCode], { type: 'text/plain' });
+      formData.append('source', blob, 'lib.rs');
 
-      if (errors.length > 0) {
+      // Call remote compilation service
+      // Remove trailing slash to prevent double slashes in URL
+      const cleanCompilerUrl = compilerUrl.replace(/\/$/, '');
+      const response = await fetch(`${cleanCompilerUrl}/compile`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         return {
           success: false,
-          errors,
-          warnings
+          errors: [errorData.error || 'Compilation failed', errorData.details || ''].filter(Boolean)
         };
       }
 
-      // Extract entry points from source code (basic parsing)
+      // Get WASM binary
+      const wasmBlob = await response.blob();
+      const wasmArrayBuffer = await wasmBlob.arrayBuffer();
+      const wasm = new Uint8Array(wasmArrayBuffer);
+
+      // Extract entry points from source code
       const entryPoints = this.extractEntryPoints(sourceCode);
 
-      // Simulate WASM generation
-      // In production, this would compile to actual WASM
-      const mockWasm = this.generateMockWasm(contractName);
+      // Convert to base64
+      const wasmBase64 = btoa(String.fromCharCode(...wasm));
+
+      console.log(`✓ Compilation successful! WASM size: ${wasm.length} bytes`);
 
       return {
         success: true,
-        wasm: mockWasm,
-        wasmBase64: btoa(String.fromCharCode(...mockWasm)),
-        warnings,
+        wasm,
+        wasmBase64,
+        warnings: [],
         metadata: {
           entryPoints,
           contractType: 'rust',
@@ -70,24 +68,82 @@ export class RustCompiler {
         }
       };
     } catch (error: any) {
+      console.error('Compilation error:', error);
       return {
         success: false,
-        errors: [error.message || 'Compilation failed']
+        errors: [error.message || 'Failed to connect to compilation service']
       };
     }
   }
 
+  /**
+   * Fallback mock compilation for when remote service is unavailable
+   */
+  private static async compileMock(
+    sourceCode: string,
+    contractName: string,
+    optimize: boolean = true
+  ): Promise<CompilationResult> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // Check for required Casper imports
+    if (!sourceCode.includes('casper_contract') && !sourceCode.includes('casper-types')) {
+      warnings.push('Missing Casper contract dependencies. Ensure Cargo.toml includes casper-contract and casper-types.');
+    }
+
+    // Check for #[no_mangle] and call() function or entry points
+    const hasNoMangleCall = sourceCode.includes('#[no_mangle]') &&
+      (sourceCode.includes('pub extern "C" fn call()') || sourceCode.includes('fn call()'));
+    const hasEntryPoints = sourceCode.includes('EntryPoints::new()') || sourceCode.includes('EntryPoint::new');
+
+    if (!hasNoMangleCall && !hasEntryPoints) {
+      errors.push('Contract must have either a #[no_mangle] pub extern "C" fn call() entry point or define EntryPoints');
+    }
+
+    if (!sourceCode.includes('#![no_std]')) {
+      warnings.push('Consider adding #![no_std] for WASM compilation');
+    }
+
+    if (!sourceCode.includes('#![no_main]')) {
+      warnings.push('Consider adding #![no_main] for contract entry points');
+    }
+
+    if (errors.length > 0) {
+      return {
+        success: false,
+        errors,
+        warnings
+      };
+    }
+
+    const entryPoints = this.extractEntryPoints(sourceCode);
+    const mockWasm = this.generateMockWasm(contractName);
+
+    return {
+      success: true,
+      wasm: mockWasm,
+      wasmBase64: btoa(String.fromCharCode(...mockWasm)),
+      warnings: [...warnings, '⚠️ Using mock compilation - configure VITE_COMPILER_SERVICE_URL for real compilation'],
+      metadata: {
+        entryPoints,
+        contractType: 'rust',
+        contractPackage: contractName
+      }
+    };
+  }
+
   private static extractEntryPoints(sourceCode: string): EntryPoint[] {
     const entryPoints: EntryPoint[] = [];
-    
+
     // Look for #[no_mangle] pub extern "C" fn patterns with better regex
     const entryPointRegex = /#\[no_mangle\]\s+pub\s+extern\s+"C"\s+fn\s+(\w+)\s*\(([^)]*)\)/g;
     let match;
-    
+
     while ((match = entryPointRegex.exec(sourceCode)) !== null) {
       const name = match[1];
       const paramsStr = match[2] || '';
-      
+
       // Parse parameters
       const args: EntryPointArg[] = [];
       if (paramsStr.trim()) {
@@ -102,14 +158,14 @@ export class RustCompiler {
           }
         }
       }
-      
+
       // Try to find return type
       let ret = 'Unit';
       const returnTypeMatch = sourceCode.match(new RegExp(`fn\\s+${name}\\s*\\([^)]*\\)\\s*->\\s*(\\w+)`));
       if (returnTypeMatch) {
         ret = returnTypeMatch[1];
       }
-      
+
       entryPoints.push({
         name,
         args,
@@ -123,7 +179,7 @@ export class RustCompiler {
       // Check if call() has parameters
       const callMatch = sourceCode.match(/fn\s+call\s*\(([^)]*)\)/);
       const args: EntryPointArg[] = [];
-      
+
       if (callMatch && callMatch[1].trim()) {
         const params = callMatch[1].split(',').map(p => p.trim());
         for (const param of params) {
@@ -136,7 +192,7 @@ export class RustCompiler {
           }
         }
       }
-      
+
       // Check for runtime args in call() function
       const runtimeArgRegex = /runtime::get_named_arg\s*\(\s*"([^"]+)"\s*\)/g;
       let argMatch;
@@ -149,7 +205,7 @@ export class RustCompiler {
           });
         }
       }
-      
+
       entryPoints.push({
         name: 'call',
         args,
@@ -166,7 +222,7 @@ export class RustCompiler {
       const epArgsStr = epMatch[2] || '';
       const epRet = epMatch[3];
       const epAccess = epMatch[4] === 'Public' ? 'Public' : 'Group';
-      
+
       const epArgs: EntryPointArg[] = [];
       if (epArgsStr.trim()) {
         // Parse Parameter::new() patterns
@@ -179,7 +235,7 @@ export class RustCompiler {
           });
         }
       }
-      
+
       // Only add if not already present
       if (!entryPoints.find(ep => ep.name === epName)) {
         entryPoints.push({
@@ -201,10 +257,10 @@ export class RustCompiler {
       0x00, 0x61, 0x73, 0x6d, // WASM magic number
       0x01, 0x00, 0x00, 0x00, // WASM version
     ];
-    
+
     // Add some mock data
     const mockData = new TextEncoder().encode(`Casper Contract: ${contractName}`);
-    
+
     return new Uint8Array([...wasmHeader, ...mockData]);
   }
 }
@@ -221,7 +277,7 @@ export class AssemblyScriptCompiler {
   ): Promise<CompilationResult> {
     try {
       console.log(`Compiling AssemblyScript contract: ${contractName}`);
-      
+
       const errors: string[] = [];
       const warnings: string[] = [];
 
@@ -266,16 +322,16 @@ export class AssemblyScriptCompiler {
 
   private static extractEntryPoints(sourceCode: string): EntryPoint[] {
     const entryPoints: EntryPoint[] = [];
-    
+
     // Look for @external decorators with function signatures
     const entryPointRegex = /@external\s+export\s+function\s+(\w+)\s*\(([^)]*)\)\s*:\s*(\w+)/g;
     let match;
-    
+
     while ((match = entryPointRegex.exec(sourceCode)) !== null) {
       const name = match[1];
       const paramsStr = match[2] || '';
       const returnType = match[3] || 'void';
-      
+
       // Parse parameters
       const args: EntryPointArg[] = [];
       if (paramsStr.trim()) {
@@ -290,7 +346,7 @@ export class AssemblyScriptCompiler {
           }
         }
       }
-      
+
       entryPoints.push({
         name,
         args,
@@ -298,17 +354,17 @@ export class AssemblyScriptCompiler {
         ret: returnType
       });
     }
-    
+
     // Also look for simpler patterns without return type
     const simpleRegex = /@external\s+export\s+function\s+(\w+)\s*\(([^)]*)\)/g;
     let simpleMatch;
     while ((simpleMatch = simpleRegex.exec(sourceCode)) !== null) {
       const name = simpleMatch[1];
       const paramsStr = simpleMatch[2] || '';
-      
+
       // Skip if already added
       if (entryPoints.find(ep => ep.name === name)) continue;
-      
+
       const args: EntryPointArg[] = [];
       if (paramsStr.trim()) {
         const params = paramsStr.split(',').map(p => p.trim());
@@ -322,7 +378,7 @@ export class AssemblyScriptCompiler {
           }
         }
       }
-      
+
       entryPoints.push({
         name,
         args,
@@ -339,9 +395,9 @@ export class AssemblyScriptCompiler {
       0x00, 0x61, 0x73, 0x6d,
       0x01, 0x00, 0x00, 0x00,
     ];
-    
+
     const mockData = new TextEncoder().encode(`AssemblyScript Contract: ${contractName}`);
-    
+
     return new Uint8Array([...wasmHeader, ...mockData]);
   }
 }
