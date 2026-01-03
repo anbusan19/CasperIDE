@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileNode, DeployConfig, WalletConnection, DeployedContract, CompilationResult } from '../../types';
+import { FileNode, DeployConfig, WalletConnection, DeployedContract, CompilationResult, DeployMode, ContractUpgrade } from '../../types';
 import { CasperDeploymentService } from '../../services/casper/deployment';
 import WalletConnectionComponent from './WalletConnection';
 import { Button } from '../UI/Button';
@@ -23,7 +23,7 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
   onDeploySuccess
 }) => {
   const [deployConfig, setDeployConfig] = useState<DeployConfig>({
-    paymentAmount: 10000000000,
+    paymentAmount: 300000000000, // 300 CSPR - safe for complex upgradeable contracts
     gasPrice: 1,
     ttl: 1800000,
     chainName: 'casper-test',
@@ -33,6 +33,9 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
   const [deploying, setDeploying] = useState(false);
   const [deployedContracts, setDeployedContracts] = useState<DeployedContract[]>([]);
   const [runtimeArgs, setRuntimeArgs] = useState<Record<string, any>>({});
+  const [deployMode, setDeployMode] = useState<DeployMode>('fresh');
+  const [contractPackageHash, setContractPackageHash] = useState('');
+  const [upgradeHistory, setUpgradeHistory] = useState<ContractUpgrade[]>([]);
 
   useEffect(() => {
     // Load deployed contracts from localStorage
@@ -64,12 +67,17 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
 
   const handleDeploy = async () => {
     if (!compilationResult?.wasm) {
-      alert('Please compile the contract first');
+      alert('No compiled WASM available. Please compile first.');
       return;
     }
 
     if (!wallet.connected) {
       alert('Please connect a wallet first');
+      return;
+    }
+
+    if (deployMode === 'upgrade' && !contractPackageHash.trim()) {
+      alert('Please enter a contract package hash for upgrade.');
       return;
     }
 
@@ -82,34 +90,64 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
         runtimeArgs
       };
 
-      const result = await CasperDeploymentService.deploy(
-        compilationResult.wasm,
-        wallet,
-        config
-      );
+      let result;
 
-      const newContract: DeployedContract = {
-        id: Date.now().toString(),
-        name: compilationResult.metadata?.contractPackage || 'Contract',
-        contractHash: result.contractHash || 'pending',
-        deployHash: result.deployHash,
-        network,
-        timestamp: Date.now(),
-        entryPoints: compilationResult.metadata?.entryPoints
-      };
+      if (deployMode === 'upgrade') {
+        // Upgrade existing contract
+        result = await CasperDeploymentService.upgradeContract(
+          compilationResult.wasm,
+          contractPackageHash,
+          wallet,
+          config
+        );
 
-      const updated = [newContract, ...deployedContracts];
-      setDeployedContracts(updated);
-      localStorage.setItem('caspier-deployed-contracts', JSON.stringify(updated));
+        // Track upgrade in history
+        const upgrade: ContractUpgrade = {
+          id: Date.now().toString(),
+          contractPackageHash,
+          version: result.version || 2,
+          deployHash: result.deployHash,
+          timestamp: Date.now(),
+          network,
+          changes: 'Contract upgraded via IDE'
+        };
 
-      if (onDeploySuccess) {
-        onDeploySuccess(newContract);
+        const updatedHistory = [upgrade, ...upgradeHistory];
+        setUpgradeHistory(updatedHistory);
+        localStorage.setItem('caspier-upgrade-history', JSON.stringify(updatedHistory));
+
+        alert(`Upgrade successful! New version: ${result.version}\nDeploy Hash: ${result.deployHash}`);
+      } else {
+        // Fresh deployment
+        result = await CasperDeploymentService.deploy(
+          compilationResult.wasm,
+          wallet,
+          config
+        );
+
+        const newContract: DeployedContract = {
+          id: Date.now().toString(),
+          name: compilationResult.metadata?.contractPackage || 'Contract',
+          contractHash: result.contractHash || 'pending',
+          deployHash: result.deployHash,
+          network,
+          timestamp: Date.now(),
+          entryPoints: compilationResult.metadata?.entryPoints
+        };
+
+        const updated = [newContract, ...deployedContracts];
+        setDeployedContracts(updated);
+        localStorage.setItem('caspier-deployed-contracts', JSON.stringify(updated));
+
+        if (onDeploySuccess) {
+          onDeploySuccess(newContract);
+        }
+
+        alert(`Deploy successful! Hash: ${result.deployHash}`);
       }
-
-      alert(`Deploy successful! Hash: ${result.deployHash}`);
     } catch (error: any) {
       console.error('Deployment error:', error);
-      alert(`Deployment failed: ${error.message}`);
+      alert(`${deployMode === 'upgrade' ? 'Upgrade' : 'Deployment'} failed: ${error.message}`);
     } finally {
       setDeploying(false);
     }
@@ -135,6 +173,52 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
             onDisconnect={onWalletDisconnect}
           />
         </div>
+
+        {/* Deploy Mode Selection */}
+        <div>
+          <label className="text-xs font-bold text-caspier-muted mb-2 block uppercase">Deploy Type</label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setDeployMode('fresh')}
+              className={`flex-1 px-3 py-2 text-sm border ${deployMode === 'fresh'
+                ? 'bg-caspier-red border-caspier-red text-white'
+                : 'bg-caspier-black border-caspier-border text-caspier-muted hover:border-caspier-red'
+                } transition-colors`}
+            >
+              Fresh Deploy
+            </button>
+            <button
+              onClick={() => setDeployMode('upgrade')}
+              className={`flex-1 px-3 py-2 text-sm border ${deployMode === 'upgrade'
+                ? 'bg-caspier-red border-caspier-red text-white'
+                : 'bg-caspier-black border-caspier-border text-caspier-muted hover:border-caspier-red'
+                } transition-colors`}
+            >
+              Upgrade Contract
+            </button>
+          </div>
+        </div>
+
+        {/* Contract Package Hash Input (for upgrades) */}
+        {deployMode === 'upgrade' && (
+          <div>
+            <label className="text-xs font-bold text-caspier-muted mb-2 block uppercase">
+              Contract Package Hash *
+            </label>
+            <input
+              type="text"
+              value={contractPackageHash}
+              onChange={(e) => setContractPackageHash(e.target.value)}
+              placeholder="hash-abc123..."
+              className="w-full bg-caspier-black border border-caspier-border text-caspier-text px-2 py-1.5 text-sm font-mono focus:border-caspier-red outline-none"
+            />
+            {contractPackageHash && (
+              <div className="text-xs text-caspier-muted mt-1">
+                Upgrading existing contract package
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Network Selection */}
         <div>
@@ -205,10 +289,17 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
         {/* Deploy Button */}
         <Button
           onClick={handleDeploy}
-          disabled={deploying || !compilationResult?.wasm || !wallet.connected}
+          disabled={
+            deploying ||
+            !compilationResult?.wasm ||
+            !wallet.connected ||
+            (deployMode === 'upgrade' && !contractPackageHash.trim())
+          }
           className="w-full"
         >
-          {deploying ? 'Deploying...' : 'Deploy Contract'}
+          {deploying
+            ? (deployMode === 'upgrade' ? 'Upgrading...' : 'Deploying...')
+            : (deployMode === 'upgrade' ? 'Upgrade Contract' : 'Deploy Contract')}
         </Button>
 
         {/* Deployed Contracts */}

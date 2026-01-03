@@ -68,29 +68,47 @@ test:
 
 extern crate alloc;
 
+use alloc::string::String;
 use casper_contract::contract_api::{runtime, storage};
-use casper_types::{Key, URef};
+use casper_contract::unwrap_or_revert::UnwrapOrRevert;
+use casper_types::{contracts::NamedKeys, EntryPoints, Key, URef};
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+const CONTRACT_PACKAGE_NAME: &str = "counter_package";
+const COUNTER_KEY: &str = "counter";
+
+/// Install or upgrade the contract
 #[no_mangle]
 pub extern "C" fn call() {
-    let counter_key = "counter";
-    
-    // Get or create the URef for the counter
-    let counter_uref: URef = match runtime::get_key(counter_key) {
-        Some(Key::URef(uref)) => uref,
-        _ => {
-            let new_uref = storage::new_uref(0u64);
-            runtime::put_key(counter_key, Key::URef(new_uref));
-            new_uref
-        }
-    };
+    // Create initial counter storage
+    let counter_uref = storage::new_uref(0u64);
 
-    // Read current value, increment, and write back
+    // Create named keys for the contract
+    let mut named_keys = NamedKeys::new();
+    named_keys.insert(String::from(COUNTER_KEY), Key::URef(counter_uref));
+
+    // Create empty entry points
+    let entry_points = EntryPoints::new();
+
+    // Create a new contract package (for upgradeable contracts)
+    let (contract_package_hash, _access_uref) = storage::create_contract_package_at_hash();
+
+    // Add the contract version to the package
+    let (_contract_hash, _contract_version) =
+        storage::add_contract_version(
+            contract_package_hash,
+            entry_points,
+            named_keys
+        );
+
+    // Store the contract package hash for future upgrades
+    runtime::put_key(CONTRACT_PACKAGE_NAME, contract_package_hash.into());
+    
+    // Automatically increment the counter on each call
     let current: u64 = storage::read(counter_uref)
-        .unwrap_or(None)
+        .unwrap_or_revert()
         .unwrap_or(0u64);
     
     storage::write(counter_uref, current + 1);

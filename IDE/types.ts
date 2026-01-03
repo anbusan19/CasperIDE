@@ -40,12 +40,12 @@ export interface TerminalLine {
 }
 
 export interface Problem {
-    id: string;
-    file: string;
-    description: string;
-    severity: 'error' | 'warning' | 'info';
-    line: number;
-    column: number;
+  id: string;
+  file: string;
+  description: string;
+  severity: 'error' | 'warning' | 'info';
+  line: number;
+  column: number;
 }
 
 export interface ProjectSettings {
@@ -72,62 +72,80 @@ export interface GitCommit {
 }
 
 export interface GitState {
-    modifiedFiles: string[];
-    stagedFiles: string[];
-    commits: GitCommit[];
-    branch: string;
+  modifiedFiles: string[];
+  stagedFiles: string[];
+  commits: GitCommit[];
+  branch: string;
 }
 
 // Casper-specific types
 export interface DeployedContract {
-    id: string;
-    name: string;
-    contractHash: string;
-    deployHash: string;
-    network: string;
-    timestamp: number;
-    entryPoints?: EntryPoint[];
+  id: string;
+  name: string;
+  contractHash: string;
+  deployHash: string;
+  network: string;
+  timestamp: number;
+  entryPoints?: EntryPoint[];
 }
 
 export interface EntryPoint {
-    name: string;
-    args: EntryPointArg[];
-    access: 'Public' | 'Group';
-    ret: string;
+  name: string;
+  args: EntryPointArg[];
+  access: 'Public' | 'Group';
+  ret: string;
 }
 
 export interface EntryPointArg {
-    name: string;
-    type: string;
-    value?: any;
+  name: string;
+  type: string;
+  value?: any;
 }
 
 export interface CompilationResult {
-    success: boolean;
-    wasm?: Uint8Array;
-    wasmBase64?: string;
-    errors?: string[];
-    warnings?: string[];
-    metadata?: ContractMetadata;
+  success: boolean;
+  wasm?: Uint8Array;
+  wasmBase64?: string;
+  errors?: string[];
+  warnings?: string[];
+  metadata?: ContractMetadata;
 }
 
 export interface ContractMetadata {
-    entryPoints: EntryPoint[];
-    contractType: string;
-    contractPackage?: string;
+  entryPoints: EntryPoint[];
+  contractType: string;
+  contractPackage?: string;
 }
 
 export interface WalletConnection {
-    type: 'casper-wallet' | 'ledger' | 'casper-signer' | 'none';
-    publicKey?: string;
-    address?: string;
-    connected: boolean;
+  type: 'casper-wallet' | 'ledger' | 'casper-signer' | 'none';
+  publicKey?: string;
+  address?: string;
+  connected: boolean;
 }
 
 export interface DeployConfig {
-    paymentAmount: number;
-    gasPrice: number;
-    ttl?: number;
-    chainName?: string;
-    runtimeArgs?: Record<string, any>;
+  paymentAmount: number;
+  gasPrice: number;
+  ttl?: number;
+  chainName?: string;
+  runtimeArgs?: Record<string, any>;
 }
+
+// Contract upgrade types
+export interface ContractUpgrade {
+  id: string;
+  contractPackageHash: string;
+  version: number;
+  deployHash: string;
+  timestamp: number;
+  network: string;
+  changes?: string;
+}
+
+export interface UpgradeConfig extends DeployConfig {
+  contractPackageHash: string;
+  version?: number;
+}
+
+export type DeployMode = 'fresh' | 'upgrade';

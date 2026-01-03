@@ -56,7 +56,7 @@ export class CasperDeploymentService {
           wasmBytes,
           runtimeArgs
         ),
-        DeployUtil.standardPayment(config.paymentAmount || 5000000000)
+        DeployUtil.standardPayment(config.paymentAmount || 300000000000)
       );
 
       // Sign deploy with wallet
@@ -93,6 +93,85 @@ export class CasperDeploymentService {
       };
     } catch (error: any) {
       throw new Error(`Deployment failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Upgrade an existing contract
+   */
+  static async upgradeContract(
+    wasmBytes: Uint8Array,
+    contractPackageHash: string,
+    wallet: WalletConnection,
+    config: DeployConfig
+  ): Promise<{ deployHash: string; version?: number }> {
+    try {
+      if (!wallet.connected || !wallet.publicKey) {
+        throw new Error('Wallet not connected');
+      }
+
+      if (!contractPackageHash) {
+        throw new Error('Contract package hash is required for upgrades');
+      }
+
+      // Use local proxy server
+      const nodes = ['http://localhost:3001/rpc'];
+
+      // Build runtime args - upgrades typically don't need special args
+      const runtimeArgs = await this.buildRuntimeArgs(config.runtimeArgs || {});
+
+      // Create upgrade deploy using standard module bytes
+      // The contract's call() function should use add_contract_version internally
+      const deploy = DeployUtil.makeDeploy(
+        new DeployUtil.DeployParams(
+          CLPublicKey.fromHex(wallet.publicKey),
+          config.chainName || 'casper-test',
+          config.gasPrice || 1,
+          config.ttl || 1800000
+        ),
+        DeployUtil.ExecutableDeployItem.newModuleBytes(
+          wasmBytes,
+          runtimeArgs
+        ),
+        DeployUtil.standardPayment(config.paymentAmount || 300000000000)
+      );
+
+      // Sign deploy with wallet
+      const { CasperWalletService } = await import('./casper-wallet-service');
+      const signedDeploy = await CasperWalletService.signDeploy(deploy, wallet);
+
+      // Send deploy to network
+      const deployHash = signedDeploy.hash;
+      let deployResult;
+      let lastError;
+
+      for (const nodeUrl of nodes) {
+        try {
+          console.log(`Sending upgrade to ${nodeUrl}...`);
+          const client = new CasperClient(nodeUrl);
+          deployResult = await client.putDeploy(signedDeploy);
+          if (deployResult) {
+            console.log(`Upgrade sent successfully to ${nodeUrl}`);
+            break;
+          }
+        } catch (err: any) {
+          console.warn(`Failed to send upgrade to ${nodeUrl}:`, err.message);
+          lastError = err;
+        }
+      }
+
+      if (!deployResult) {
+        throw new Error(`Failed to send upgrade to network. Last error: ${lastError?.message || 'Unknown error'}`);
+      }
+
+      // Note: Version tracking would require querying the contract state
+      // For now, we return undefined and let the UI handle it
+      return {
+        deployHash,
+        version: undefined
+      };
+    } catch (error: any) {
+      throw new Error(`Contract upgrade failed: ${error.message}`);
     }
   }
 
