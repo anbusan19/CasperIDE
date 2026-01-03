@@ -177,25 +177,30 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
         </div>
 
         {/* Runtime Arguments */}
-        {compilationResult?.metadata?.entryPoints && compilationResult.metadata.entryPoints.length > 0 && (
-          <div>
-            <label className="text-xs font-bold text-caspier-muted mb-2 block uppercase">Runtime Arguments</label>
-            <div className="space-y-2">
-              {compilationResult.metadata.entryPoints[0].args.map((arg, idx) => (
-                <div key={idx}>
-                  <label className="text-xs text-caspier-muted block mb-1">{arg.name} ({arg.type})</label>
-                  <input
-                    type="text"
-                    value={runtimeArgs[arg.name] || ''}
-                    onChange={(e) => updateRuntimeArg(arg.name, e.target.value)}
-                    placeholder={`Enter ${arg.name}`}
-                    className="w-full bg-caspier-black border border-caspier-border text-caspier-text px-2 py-1.5 text-sm focus:border-caspier-red outline-none"
-                  />
-                </div>
-              ))}
+        {compilationResult?.metadata?.entryPoints &&
+          compilationResult.metadata.entryPoints.length > 0 &&
+          compilationResult.metadata.entryPoints[0]?.args &&
+          Array.isArray(compilationResult.metadata.entryPoints[0].args) && (
+            <div>
+              <label className="text-xs font-bold text-caspier-muted mb-2 block uppercase">Runtime Arguments</label>
+              <div className="space-y-2">
+                {compilationResult.metadata.entryPoints[0].args
+                  .filter(arg => arg && typeof arg.name === 'string' && typeof arg.type === 'string')
+                  .map((arg, idx) => (
+                    <div key={idx}>
+                      <label className="text-xs text-caspier-muted block mb-1">{arg.name} ({arg.type})</label>
+                      <input
+                        type="text"
+                        value={runtimeArgs[arg.name] || ''}
+                        onChange={(e) => updateRuntimeArg(arg.name, e.target.value)}
+                        placeholder={`Enter ${arg.name}`}
+                        className="w-full bg-caspier-black border border-caspier-border text-caspier-text px-2 py-1.5 text-sm focus:border-caspier-red outline-none"
+                      />
+                    </div>
+                  ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Deploy Button */}
         <Button
