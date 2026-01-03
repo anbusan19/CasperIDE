@@ -23,7 +23,7 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
   onDeploySuccess
 }) => {
   const [deployConfig, setDeployConfig] = useState<DeployConfig>({
-    paymentAmount: 5000000000,
+    paymentAmount: 10000000000,
     gasPrice: 1,
     ttl: 1800000,
     chainName: 'casper-test',
@@ -218,39 +218,46 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
             <div className="text-caspier-muted text-xs italic">No contracts deployed yet.</div>
           ) : (
             <div className="space-y-2">
-              {deployedContracts.map(contract => (
-                <div key={contract.id} className="p-2 bg-caspier-black border border-caspier-border rounded text-xs">
-                  <div className="text-caspier-text font-bold mb-1">{contract.name}</div>
-                  <div className="text-caspier-muted space-y-1">
-                    <div>Network: <span className="text-caspier-text">{contract.network}</span></div>
-                    <div className="flex items-start gap-1">
-                      <span>Deploy Hash:</span>
-                      <span className="font-mono text-xs break-all">{contract.deployHash}</span>
-                    </div>
-                    {contract.contractHash && contract.contractHash !== 'pending' && (
+              {deployedContracts.map(contract => {
+                // Convert deployHash to hex string if it's a Uint8Array
+                const deployHashStr = typeof contract.deployHash === 'string'
+                  ? contract.deployHash
+                  : Array.from(contract.deployHash).map(b => b.toString(16).padStart(2, '0')).join('');
+
+                return (
+                  <div key={contract.id} className="p-2 bg-caspier-black border border-caspier-border rounded text-xs">
+                    <div className="text-caspier-text font-bold mb-1">{contract.name}</div>
+                    <div className="text-caspier-muted space-y-1">
+                      <div>Network: <span className="text-caspier-text">{contract.network}</span></div>
                       <div className="flex items-start gap-1">
-                        <span>Contract Hash:</span>
-                        <span className="font-mono text-xs break-all">{contract.contractHash}</span>
+                        <span>Deploy Hash:</span>
+                        <span className="font-mono text-xs break-all">{deployHashStr}</span>
                       </div>
-                    )}
-                    <div className="text-caspier-muted text-xs mt-1">
-                      {new Date(contract.timestamp).toLocaleString()}
-                    </div>
-                    {contract.entryPoints && contract.entryPoints.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-caspier-border">
-                        <div className="text-caspier-muted mb-1">Entry Points:</div>
-                        <div className="flex flex-wrap gap-1">
-                          {contract.entryPoints.map((ep, idx) => (
-                            <span key={idx} className="px-1.5 py-0.5 bg-caspier-dark border border-caspier-border rounded text-xs">
-                              {ep.name}
-                            </span>
-                          ))}
+                      {contract.contractHash && contract.contractHash !== 'pending' && (
+                        <div className="flex items-start gap-1">
+                          <span>Contract Hash:</span>
+                          <span className="font-mono text-xs break-all">{contract.contractHash}</span>
                         </div>
+                      )}
+                      <div className="text-caspier-muted text-xs mt-1">
+                        {new Date(contract.timestamp).toLocaleString()}
                       </div>
-                    )}
+                      {contract.entryPoints && contract.entryPoints.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-caspier-border">
+                          <div className="text-caspier-muted mb-1">Entry Points:</div>
+                          <div className="flex flex-wrap gap-1">
+                            {contract.entryPoints.map((ep, idx) => (
+                              <span key={idx} className="px-1.5 py-0.5 bg-caspier-dark border border-caspier-border rounded text-xs">
+                                {ep.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

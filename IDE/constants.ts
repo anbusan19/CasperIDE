@@ -66,31 +66,41 @@ test:
                 content: `#![no_std]
 #![no_main]
 
-#[cfg(not(target_arch = "wasm32"))]
-compile_error!("target arch should be wasm32: compile with '--target wasm32-unknown-unknown'");
-
 extern crate alloc;
-use alloc::string::String;
-use casper_contract::{
-    contract_api::{runtime, storage},
-    unwrap_or_revert::UnwrapOrRevert,
-};
-use casper_types::{CLType, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter, Key};
 
-const KEY_NAME: &str = "my_value";
-const RUNTIME_ARG_MESSAGE: &str = "message";
+use casper_contract::contract_api::{runtime, storage};
+use casper_types::{Key, URef};
+
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let message: String = runtime::get_named_arg(RUNTIME_ARG_MESSAGE);
+    let counter_key = "counter";
     
-    // Store the message under a named key
-    let message_uref = storage::new_uref(message);
-    let key = Key::URef(message_uref);
-    runtime::put_key(KEY_NAME, key);
+    // Get or create the URef for the counter
+    let counter_uref: URef = match runtime::get_key(counter_key) {
+        Some(Key::URef(uref)) => uref,
+        _ => {
+            let new_uref = storage::new_uref(0u64);
+            runtime::put_key(counter_key, Key::URef(new_uref));
+            new_uref
+        }
+    };
+
+    // Read current value, increment, and write back
+    let current: u64 = storage::read(counter_uref)
+        .unwrap_or(None)
+        .unwrap_or(0u64);
     
-    runtime::print("Caspier contract executed successfully.");
-}`
+    storage::write(counter_uref, current + 1);
+}
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    loop {}
+}
+`
               }
             ]
           }

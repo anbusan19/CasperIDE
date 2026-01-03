@@ -26,16 +26,13 @@ export class CasperDeploymentService {
         throw new Error('Wallet not connected');
       }
 
-      // Define fallback nodes (using local proxy to bypass CORS)
+      // Use local proxy server to bypass network/CORS issues
       const testnetNodes = [
-        '/casper-rpc',
-        '/casper-node-rpc',
-        'http://159.65.203.12:7777/rpc' // Non-SSL usually has lenient CORS
+        'http://localhost:3001/rpc'  // Local proxy server
       ];
 
       const mainnetNodes = [
-        'https://node-clarity-mainnet.make.services/rpc',
-        'https://rpc.mainnet.casperlabs.io/rpc'
+        'http://localhost:3001/rpc'  // Can handle mainnet too
       ];
 
       const targetNetwork = config.chainName === 'casper' ? 'mainnet' : 'testnet';
