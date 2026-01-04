@@ -43,8 +43,7 @@ const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-6">
           {/* Brand */}
           <div className="flex items-center gap-3">
-               <img src={logo} alt="Caspier Logo" className="w-7 h-7 transform hover:rotate-3 transition-transform cursor-default" />
-               <span className="font-bold text-caspier-text tracking-wider">CASPIER <span className="text-caspier-red text-xs ml-0.5">v1.2</span></span>
+          <img src="/Caspier-horizontal.svg" alt="Rust" className="w-20" />
           </div>
 
           {/* Separator */}
