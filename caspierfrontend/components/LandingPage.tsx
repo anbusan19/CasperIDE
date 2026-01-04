@@ -526,7 +526,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunch, theme, toggl
                >
                   {isDark ? <Sun size={20} /> : <Moon size={20} />}
                </button>
-               <NeoButton variant="primary" onClick={onLaunch} theme={theme}>Launch App</NeoButton>
+               <a href="https://caspier-ide.vercel.app" target="_blank" rel="noopener noreferrer">
+               <NeoButton variant="primary" theme={theme}>Launch App</NeoButton>
+               </a>
             </div>
          </header>
 
@@ -812,9 +814,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunch, theme, toggl
                   </div>
 
                   <div className="mt-12">
-                     <NeoButton variant="primary" onClick={onLaunch} className="!text-lg !px-8 !py-4" theme={theme}>
+                     <a href="https://caspier-ide.vercel.app" target="_blank" rel="noopener noreferrer">
+                     <NeoButton variant="primary" className="!text-lg !px-8 !py-4" theme={theme}>
                         Launch Caspier IDE <ArrowRight className="ml-2" />
                      </NeoButton>
+                     </a>
                   </div>
                </div>
             </section>
