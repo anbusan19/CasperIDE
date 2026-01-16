@@ -12,25 +12,35 @@ export class RustCompiler {
     optimize: boolean = true
   ): Promise<CompilationResult> {
     try {
-      console.log(`Compiling Rust contract: ${contractName} on GCP VM...`);
-
-      // Get compiler service URL from environment
-      const compilerUrl = import.meta.env.VITE_COMPILER_SERVICE_URL;
-
-      if (!compilerUrl) {
-        console.warn('VITE_COMPILER_SERVICE_URL not set, falling back to mock compilation');
-        return this.compileMock(sourceCode, contractName, optimize);
-      }
+      console.log(`Compiling Rust contract: ${contractName}...`);
 
       // Create FormData with source code
       const formData = new FormData();
       const blob = new Blob([sourceCode], { type: 'text/plain' });
       formData.append('source', blob, 'lib.rs');
 
-      // Call remote compilation service
-      // Remove trailing slash to prevent double slashes in URL
-      const cleanCompilerUrl = compilerUrl.replace(/\/$/, '');
-      const response = await fetch(`${cleanCompilerUrl}/compile`, {
+      // In production (Vercel), use /api/compile proxy to avoid mixed content errors
+      // In development, use direct GCP URL if available
+      const isDev = import.meta.env.DEV;
+      const compilerUrl = import.meta.env.VITE_COMPILER_SERVICE_URL;
+
+      let endpoint: string;
+      if (isDev && compilerUrl) {
+        // Development: direct GCP access
+        const cleanUrl = compilerUrl.replace(/\/$/, '');
+        endpoint = `${cleanUrl}/compile`;
+        console.log('Using direct GCP compiler:', endpoint);
+      } else if (import.meta.env.PROD) {
+        // Production (Vercel): use serverless proxy to avoid mixed content
+        endpoint = '/api/compile';
+        console.log('Using Vercel API proxy:', endpoint);
+      } else {
+        // Fallback to mock if no URL in dev
+        console.warn('No compiler URL configured, using mock compilation');
+        return this.compileMock(sourceCode, contractName, optimize);
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
       });

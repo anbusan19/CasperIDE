@@ -14,8 +14,8 @@ export interface Template {
 export const TEMPLATES: Template[] = [
   {
     id: 'hello-world-rust',
-    name: 'Hello World (Rust)',
-    description: 'A simple hello world contract that stores and retrieves a message',
+    name: 'Simple Counter (Rust)',
+    description: 'A basic counter contract that initializes to 0 - no arguments required',
     language: 'rust',
     files: helloWorldRustExample
   },
@@ -46,16 +46,16 @@ export function templateToFileNodes(template: Template, parentId: string = 'root
   for (const [path, content] of Object.entries(template.files)) {
     const parts = path.split('/');
     let currentPath = '';
-    
+
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       currentPath = currentPath ? `${currentPath}/${part}` : part;
-      
+
       if (!fileMap[currentPath]) {
         const isFile = i === parts.length - 1;
         const extension = isFile ? part.split('.').pop()?.toLowerCase() : undefined;
         const language = isFile ? getLanguageFromExtension(extension || '') : undefined;
-        
+
         const node: FileNode = {
           id: `${parentId}-${currentPath}`,
           name: part,
@@ -64,9 +64,9 @@ export function templateToFileNodes(template: Template, parentId: string = 'root
           language,
           children: isFile ? undefined : []
         };
-        
+
         fileMap[currentPath] = node;
-        
+
         // Add to parent
         if (i === 0) {
           nodes.push(node);

@@ -1,54 +1,53 @@
-// Hello World Contract Example (Rust)
+// Simple Counter Contract (Rust) - No Arguments Required
 export const helloWorldRustExample = {
-  'Cargo.toml': `[package]
-name = "hello_world"
+    'Cargo.toml': `[package]
+name = "simple_counter"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-casper-contract = "1.4.4"
-casper-types = "1.5.0"
+casper-contract = "3.0.0"
+casper-types = "3.0.0"
+wee_alloc = "0.4.5"
 
 [lib]
 crate-type = ["cdylib"]`,
-  
-  'src/main.rs': `#![no_std]
+
+    'src/main.rs': `#![no_std]
 #![no_main]
 
 #[cfg(not(target_arch = "wasm32"))]
 compile_error!("target arch should be wasm32: compile with '--target wasm32-unknown-unknown'");
 
 extern crate alloc;
-use alloc::string::String;
+
 use casper_contract::{
     contract_api::{runtime, storage},
-    unwrap_or_revert::UnwrapOrRevert,
 };
-use casper_types::{Key, URef};
+use casper_types::Key;
 
-const MESSAGE_KEY: &str = "message";
+// Use wee_alloc as the global allocator
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
+// Panic handler for no_std
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    loop {}
+}
+
+const COUNTER_KEY: &str = "counter";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let message: String = runtime::get_named_arg("message");
+    // Initialize counter to 0
+    let counter: u64 = 0;
     
-    // Store the message
-    let message_uref: URef = storage::new_uref(message);
-    runtime::put_key(MESSAGE_KEY, Key::URef(message_uref));
+    // Store the counter in the account's named keys
+    let counter_uref = storage::new_uref(counter);
+    let counter_key = Key::URef(counter_uref);
     
-    runtime::print("Hello World contract executed successfully!");
-}
-
-#[no_mangle]
-pub extern "C" fn get_message() {
-    let message_key: Key = runtime::get_key(MESSAGE_KEY)
-        .unwrap_or_revert();
-    let message_uref: URef = message_key.into_uref().unwrap_or_revert();
-    let message: String = storage::read(message_uref)
-        .unwrap_or_revert()
-        .unwrap_or_revert();
-    
-    runtime::ret(casper_types::CLValue::from_t(message).unwrap_or_revert());
+    // Save the key under the name "counter"
+    runtime::put_key(COUNTER_KEY, counter_key);
 }`
 };
-
