@@ -6,6 +6,9 @@ import { DeployConfig, WalletConnection } from '../../types';
  * Handles contract deployment to Casper network
  */
 export class CasperDeploymentService {
+  // RPC proxy endpoint - handled by Vite middleware in dev, Vercel serverless in prod
+  private static readonly RPC_PROXY = '/api/rpc';
+
   private static readonly NETWORKS = {
     testnet: 'https://node-clarity-testnet.make.services/rpc',
     mainnet: 'https://node-clarity-mainnet.make.services/rpc',
@@ -26,13 +29,13 @@ export class CasperDeploymentService {
         throw new Error('Wallet not connected');
       }
 
-      // Use local proxy server to bypass network/CORS issues
+      // Use RPC proxy (auto-detects environment)
       const testnetNodes = [
-        'http://localhost:3001/rpc'  // Local proxy server
+        this.RPC_PROXY  // Auto-detects /api/rpc (Vercel) or localhost:3001/rpc (local)
       ];
 
       const mainnetNodes = [
-        'http://localhost:3001/rpc'  // Can handle mainnet too
+        this.RPC_PROXY  // Can handle mainnet too
       ];
 
       const targetNetwork = config.chainName === 'casper' ? 'mainnet' : 'testnet';
@@ -114,8 +117,8 @@ export class CasperDeploymentService {
         throw new Error('Contract package hash is required for upgrades');
       }
 
-      // Use local proxy server
-      const nodes = ['http://localhost:3001/rpc'];
+      // Use RPC proxy (auto-detects environment)
+      const nodes = [this.RPC_PROXY];
 
       // Build runtime args - upgrades typically don't need special args
       const runtimeArgs = await this.buildRuntimeArgs(config.runtimeArgs || {});
