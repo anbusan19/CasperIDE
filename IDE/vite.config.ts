@@ -14,38 +14,49 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path.replace(/^\/api\/rpc/, '/rpc'),
-          configure: (proxy, options) => {
-            proxy.on('error', (err, req, res) => {
-              console.log('[RPC Proxy] Error:', err.message);
-            });
-            proxy.on('proxyReq', (proxyReq, req, res) => {
-              console.log('[RPC Proxy] Request to Casper testnet');
-            });
-          }
+          configure: (proxy) => {
+            proxy.on('error', (err) => console.log('[RPC Proxy] Error:', err.message));
+            proxy.on('proxyReq', () => console.log('[RPC Proxy] Request to Casper testnet'));
+          },
         },
         '/casper-rpc': {
           target: 'https://rpc.testnet.casperlabs.io',
           changeOrigin: true,
           secure: false,
-          rewrite: (path) => path.replace(/^\/casper-rpc/, '')
+          rewrite: (path) => path.replace(/^\/casper-rpc/, ''),
         },
         '/casper-node-rpc': {
           target: 'https://node-clarity-testnet.make.services',
           changeOrigin: true,
           secure: false,
-          rewrite: (path) => path.replace(/^\/casper-node-rpc/, '')
-        }
-      }
+          rewrite: (path) => path.replace(/^\/casper-node-rpc/, ''),
+        },
+      },
     },
     plugins: [react()],
     define: {
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
-      }
-    }
+      },
+    },
+    build: {
+      // Increase chunk warning limit to 1.5 MB to avoid warnings
+      chunkSizeWarningLimit: 1500,
+
+      rollupOptions: {
+        output: {
+          // Split casper-js-sdk into its own chunk
+          manualChunks: {
+            'casper-sdk': ['casper-js-sdk'],
+            // Optional: split react/react-dom to another chunk
+            'react-vendor': ['react', 'react-dom'],
+          },
+        },
+      },
+    },
   };
 });
