@@ -3,9 +3,7 @@
 
 export const config = {
     api: {
-        bodyParser: {
-            sizeLimit: '10mb',
-        },
+        bodyParser: false, // Disable body parser to handle multipart form data
     },
     maxDuration: 300, // 5 minutes for compilation
 };
@@ -30,24 +28,16 @@ export default async function handler(req, res) {
 
         console.log('[Compile Proxy] Forwarding to GCP:', compilerUrl);
 
-        // Forward the request to GCP compiler
-        const formData = new FormData();
+        // Import fetch (Node 18+ has it built-in, but explicitly use it)
+        const fetch = globalThis.fetch || (await import('node-fetch')).default;
 
-        // Get the source code from request body
-        const { source } = req.body;
-        if (!source) {
-            return res.status(400).json({ error: 'No source code provided' });
-        }
-
-        // Create a blob for the source file
-        const blob = new Blob([source], { type: 'text/plain' });
-        formData.append('source', blob, 'lib.rs');
-
+        // Forward the entire request body to GCP
         const response = await fetch(`${compilerUrl}/compile`, {
             method: 'POST',
-            body: formData,
+            body: req, // Forward the raw request stream
             headers: {
-                // Don't set Content-Type - let fetch set it with boundary
+                ...req.headers,
+                'host': new URL(compilerUrl).host, // Update host header
             },
             signal: AbortSignal.timeout(300000), // 5 min timeout
         });
@@ -55,10 +45,7 @@ export default async function handler(req, res) {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('[Compile Proxy] GCP Error:', errorText);
-            return res.status(response.status).json({
-                error: 'Compilation failed',
-                details: errorText,
-            });
+            return res.status(response.status).send(errorText);
         }
 
         // Get the compiled WASM binary
@@ -68,7 +55,7 @@ export default async function handler(req, res) {
 
         console.log('[Compile Proxy] Success! WASM size:', wasmSize, 'bytes');
 
-        // Return the WASM binary
+        // Return the WASM binary with headers
         res.setHeader('Content-Type', 'application/wasm');
         if (compilationTime) res.setHeader('X-Compilation-Time', compilationTime);
         if (wasmSize) res.setHeader('X-WASM-Size', wasmSize);
