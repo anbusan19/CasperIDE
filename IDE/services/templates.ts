@@ -1,6 +1,4 @@
 import { FileNode } from '../types';
-import { counterRustExample } from '../examples/counter-rust';
-import { ftAssemblyScriptExample } from '../examples/ft-assemblyscript';
 import { helloWorldRustExample } from '../examples/hello-world-rust';
 
 export interface Template {
@@ -13,25 +11,11 @@ export interface Template {
 
 export const TEMPLATES: Template[] = [
   {
-    id: 'hello-world-rust',
-    name: 'Simple Counter (Rust)',
+    id: 'simple-counter',
+    name: 'Simple Counter',
     description: 'A basic counter contract that initializes to 0 - no arguments required',
     language: 'rust',
     files: helloWorldRustExample
-  },
-  {
-    id: 'counter-rust',
-    name: 'Counter (Rust)',
-    description: 'A simple counter contract with increment, decrement, and get functions',
-    language: 'rust',
-    files: counterRustExample
-  },
-  {
-    id: 'ft-assemblyscript',
-    name: 'Fungible Token (AssemblyScript)',
-    description: 'A basic fungible token contract with transfer, balance, and approval functions',
-    language: 'assemblyscript',
-    files: ftAssemblyScriptExample
   }
 ];
 

@@ -23,7 +23,7 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
   onDeploySuccess
 }) => {
   const [deployConfig, setDeployConfig] = useState<DeployConfig>({
-    paymentAmount: 300000000000, // 300 CSPR - safe for complex upgradeable contracts
+    paymentAmount: 150000000000, // 150 CSPR - default payment amount
     gasPrice: 1,
     ttl: 1800000,
     chainName: 'casper-test',
@@ -116,7 +116,11 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
         setUpgradeHistory(updatedHistory);
         localStorage.setItem('caspier-upgrade-history', JSON.stringify(updatedHistory));
 
-        alert(`Upgrade successful! New version: ${result.version}\nDeploy Hash: ${result.deployHash}`);
+        const explorerUrl = network === 'testnet'
+          ? `https://testnet.cspr.live/transaction/${result.deployHash}`
+          : `https://cspr.live/transaction/${result.deployHash}`;
+        alert(`Upgrade successful!\nNew version: ${result.version}\nTransaction: ${result.deployHash}\n\nView on Explorer:\n${explorerUrl}`);
+        console.log('Explorer URL:', explorerUrl);
       } else {
         // Fresh deployment
         result = await CasperDeploymentService.deploy(
@@ -143,7 +147,11 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
           onDeploySuccess(newContract);
         }
 
-        alert(`Deploy successful! Hash: ${result.deployHash}`);
+        const explorerUrl = network === 'testnet'
+          ? `https://testnet.cspr.live/transaction/${result.deployHash}`
+          : `https://cspr.live/transaction/${result.deployHash}`;
+        alert(`Deploy successful!\nTransaction: ${result.deployHash}\n\nView on Explorer:\n${explorerUrl}`);
+        console.log('Explorer URL:', explorerUrl);
       }
     } catch (error: any) {
       console.error('Deployment error:', error);
@@ -322,7 +330,16 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
                       <div>Network: <span className="text-caspier-text">{contract.network}</span></div>
                       <div className="flex items-start gap-1">
                         <span>Deploy Hash:</span>
-                        <span className="font-mono text-xs break-all">{deployHashStr}</span>
+                        <a
+                          href={contract.network === 'testnet'
+                            ? `https://testnet.cspr.live/transaction/${deployHashStr}`
+                            : `https://cspr.live/transaction/${deployHashStr}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs break-all text-caspier-red hover:underline"
+                        >
+                          {deployHashStr}
+                        </a>
                       </div>
                       {contract.contractHash && contract.contractHash !== 'pending' && (
                         <div className="flex items-start gap-1">
