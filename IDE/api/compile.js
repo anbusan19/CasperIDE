@@ -1,71 +1,72 @@
 // Vercel Serverless Function - Compilation Proxy
 // Proxies compilation requests to GCP server to avoid mixed content errors
 
+import { IncomingMessage } from 'http';
+
 export const config = {
     api: {
-        bodyParser: false, // Disable body parser to handle multipart form data
+        bodyParser: false, // We need raw request stream
     },
-    maxDuration: 300, // 5 minutes for compilation
+    maxDuration: 300, // 5 minutes
 };
 
 export default async function handler(req, res) {
+    if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        return res.status(200).end();
+    }
+
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
 
     try {
-        // Get GCP compiler URL from environment variable
         const compilerUrl = process.env.VITE_COMPILER_SERVICE_URL || 'http://20.193.142.1:8080';
 
-        console.log('[Compile Proxy] Forwarding to GCP:', compilerUrl);
+        console.log('[Compile Proxy] Forwarding request to:', compilerUrl);
 
-        // Import fetch (Node 18+ has it built-in, but explicitly use it)
-        const fetch = globalThis.fetch || (await import('node-fetch')).default;
+        // Use dynamic import for node-fetch if native fetch fails
+        const fetchFn = globalThis.fetch;
 
-        // Forward the entire request body to GCP
-        const response = await fetch(`${compilerUrl}/compile`, {
+        // Forward the raw request to GCP
+        const response = await fetchFn(`${compilerUrl}/compile`, {
             method: 'POST',
-            body: req, // Forward the raw request stream
             headers: {
-                ...req.headers,
-                'host': new URL(compilerUrl).host, // Update host header
+                'Content-Type': req.headers['content-type'],
             },
-            signal: AbortSignal.timeout(300000), // 5 min timeout
+            body: req,
+            duplex: 'half', // Required for streaming request body
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[Compile Proxy] GCP Error:', errorText);
+            console.error('[Compile Proxy] GCP returned error:', errorText);
             return res.status(response.status).send(errorText);
         }
 
-        // Get the compiled WASM binary
-        const wasmBuffer = await response.arrayBuffer();
-        const compilationTime = response.headers.get('X-Compilation-Time');
-        const wasmSize = response.headers.get('X-WASM-Size');
+        // Forward response headers
+        const compilationTime = response.headers.get('x-compilation-time');
+        const wasmSize = response.headers.get('x-wasm-size');
 
-        console.log('[Compile Proxy] Success! WASM size:', wasmSize, 'bytes');
-
-        // Return the WASM binary with headers
         res.setHeader('Content-Type', 'application/wasm');
         if (compilationTime) res.setHeader('X-Compilation-Time', compilationTime);
         if (wasmSize) res.setHeader('X-WASM-Size', wasmSize);
 
-        return res.send(Buffer.from(wasmBuffer));
+        // Stream the WASM binary back
+        const buffer = await response.arrayBuffer();
+        console.log('[Compile Proxy] Success! Returning WASM:', buffer.byteLength, 'bytes');
+
+        return res.send(Buffer.from(buffer));
     } catch (error) {
         console.error('[Compile Proxy] Error:', error);
         return res.status(500).json({
-            error: 'Proxy error',
-            details: error.message,
+            error: 'Compilation proxy error',
+            message: error.message,
+            stack: error.stack,
         });
     }
 }
