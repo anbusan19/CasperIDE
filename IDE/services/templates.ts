@@ -2,6 +2,7 @@ import { FileNode } from '../types';
 import { helloWorldRustExample } from '../examples/hello-world-rust';
 import { upgradeableCounterV1 } from '../examples/upgradeable-counter-v1';
 import { upgradeableCounterV2 } from '../examples/upgradeable-counter-v2';
+import { upgradeableCounterV3 } from '../examples/upgradeable-counter-v3';
 
 export interface Template {
   id: string;
@@ -32,6 +33,13 @@ export const TEMPLATES: Template[] = [
     description: 'Upgrade example - adds decrement & reset features to existing contract',
     language: 'rust',
     files: upgradeableCounterV2
+  },
+  {
+    id: 'upgradeable-counter-v3',
+    name: 'Upgradeable Counter V3',
+    description: 'Upgrade with parameters - adds set_value & multiply entry points',
+    language: 'rust',
+    files: upgradeableCounterV3
   }
 ];
 

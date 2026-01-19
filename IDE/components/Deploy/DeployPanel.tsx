@@ -116,21 +116,26 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
         setUpgradeHistory(updatedHistory);
         localStorage.setItem('caspier-upgrade-history', JSON.stringify(updatedHistory));
 
+        // Convert deploy hash to hex string if it's a Uint8Array
+        const deployHashHex = result.deployHash instanceof Uint8Array
+          ? Array.from(result.deployHash).map(b => b.toString(16).padStart(2, '0')).join('')
+          : result.deployHash;
+
         const explorerUrl = network === 'testnet'
-          ? `https://testnet.cspr.live/transaction/${result.deployHash}`
-          : `https://cspr.live/transaction/${result.deployHash}`;
+          ? `https://testnet.cspr.live/deploy/${deployHashHex}`
+          : `https://cspr.live/deploy/${deployHashHex}`;
 
         // Log upgrade details to console
         console.log('='.repeat(50));
         console.log('🚀 CONTRACT UPGRADE SUCCESSFUL');
         console.log('='.repeat(50));
-        console.log('Deploy Hash:', result.deployHash);
+        console.log('Deploy Hash:', deployHashHex);
         console.log('New Version:', result.version || 'pending');
         console.log('Package Hash:', contractPackageHash);
         console.log('Explorer URL:', explorerUrl);
         console.log('='.repeat(50));
 
-        alert(`Upgrade successful!\n\nPackage Hash: ${contractPackageHash}\nNew Version: ${result.version || 'pending'}\nDeploy Hash: ${result.deployHash}\n\nView on Explorer:\n${explorerUrl}\n\n💡 Check your account's named keys on the explorer for the new contract hash!`);
+        alert(`Upgrade successful!\n\nPackage Hash: ${contractPackageHash}\nNew Version: ${result.version || 'pending'}\nDeploy Hash: ${deployHashHex}\n\nView on Explorer:\n${explorerUrl}\n\n💡 Check your account's named keys on the explorer for the new contract hash!`);
       } else {
         // Fresh deployment
         result = await CasperDeploymentService.deploy(

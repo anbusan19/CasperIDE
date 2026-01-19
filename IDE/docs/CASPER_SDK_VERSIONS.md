@@ -179,6 +179,18 @@ let hash = key.into_hash();  // Returns Option<[u8; 32]>
 let hash = key.into_hash_addr();  // RENAMED to into_hash_addr()
 ```
 
+### 6. Parameter Import Path
+
+**3.0.0:**
+```rust
+use casper_types::Parameter;  // Root level
+```
+
+**6.0+:**
+```rust
+use casper_types::Parameter;  // Still root level (NOT in contracts::)
+```
+
 ---
 
 ## Complete Working Examples
