@@ -59,7 +59,28 @@ let (contract_hash, version) = storage::new_contract(
 );
 ```
 
-### 3. Cargo.toml Dependencies
+### 3. `storage::add_contract_version()` Signature
+
+**3.0.0 - 3 arguments:**
+```rust
+let (contract_hash, version) = storage::add_contract_version(
+    package_hash,
+    entry_points,
+    named_keys,
+);
+```
+
+**5.0+ - 4 arguments (added message_topics):**
+```rust
+let (contract_hash, version) = storage::add_contract_version(
+    package_hash,
+    entry_points.into(),        // Note: requires .into()
+    named_keys.into(),          // Note: requires .into()
+    Default::default(),         // NEW: message_topics (BTreeMap<String, MessageTopicOperation>)
+);
+```
+
+### 4. Cargo.toml Dependencies
 
 **3.0.0:**
 ```toml
@@ -132,6 +153,30 @@ entry_points.into()
 
 // contracts::NamedKeys → casper_types::NamedKeys  
 named_keys.into()
+```
+
+### 4. ContractPackageHash Import Path
+
+**3.0.0:**
+```rust
+use casper_types::ContractPackageHash;
+```
+
+**6.0+:**
+```rust
+use casper_types::contracts::ContractPackageHash;  // Moved to contracts module
+```
+
+### 5. Key::into_hash() Renamed
+
+**3.0.0:**
+```rust
+let hash = key.into_hash();  // Returns Option<[u8; 32]>
+```
+
+**6.0+:**
+```rust
+let hash = key.into_hash_addr();  // RENAMED to into_hash_addr()
 ```
 
 ---
@@ -326,21 +371,36 @@ const cmd = `cargo +nightly-2025-01-01 build --release --target wasm32-unknown-u
 │   use casper_types::{                                           │
 │       contracts::{EntryPoint, EntryPoints, NamedKeys},          │
 │       EntryPointAccess, EntryPointType, CLType, Key, URef,      │
+│       ContractPackageHash,  // For upgrades                     │
 │   };                                                            │
 ├─────────────────────────────────────────────────────────────────┤
 │ EntryPointType:                                                 │
 │   EntryPointType::Called   (was Contract)                       │
 ├─────────────────────────────────────────────────────────────────┤
-│ new_contract (5 args):                                          │
+│ new_contract (5 args - for V1 fresh deploy):                    │
 │   storage::new_contract(                                        │
 │       entry_points.into(),                                      │
 │       Some(named_keys.into()),                                  │
 │       Some(String::from("pkg")),                                │
 │       Some(String::from("uref")),                               │
-│       None,           ← NEW: message_topics                     │
+│       None,           ← message_topics                          │
+│   );                                                            │
+├─────────────────────────────────────────────────────────────────┤
+│ add_contract_version (4 args - for V2+ upgrades):               │
+│   storage::add_contract_version(                                │
+│       package_hash,                                             │
+│       entry_points.into(),                                      │
+│       named_keys.into(),                                        │
+│       Default::default(),  ← message_topics                     │
 │   );                                                            │
 ├─────────────────────────────────────────────────────────────────┤
 │ Toolchain: nightly-2025-01-01                                   │
 │ Payment: >= 200 CSPR for contract packages                      │
+├─────────────────────────────────────────────────────────────────┤
+│ DO NOT include:                                                 │
+│   - #[panic_handler]                                            │
+│   - #[global_allocator]                                         │
+│   - wee_alloc dependency                                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
+

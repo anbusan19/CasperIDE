@@ -28,8 +28,8 @@ use alloc::vec;
 use casper_contract::contract_api::{runtime, storage};
 use casper_contract::unwrap_or_revert::UnwrapOrRevert;
 use casper_types::{
-    contracts::{EntryPoint, EntryPoints, NamedKeys},
-    EntryPointAccess, EntryPointType, CLType, Key, URef, ContractPackageHash,
+    contracts::{EntryPoint, EntryPoints, NamedKeys, ContractPackageHash},
+    EntryPointAccess, EntryPointType, CLType, URef,
 };
 
 const COUNTER_KEY: &str = "counter";
@@ -125,14 +125,15 @@ pub extern "C" fn reset() {
 #[no_mangle]
 pub extern "C" fn call() {
     // Get the existing package hash from account named keys
+    // Note: into_hash_addr() replaces into_hash() in casper-types 6.0
     let package_hash: ContractPackageHash = runtime::get_key(PACKAGE_HASH_KEY)
         .unwrap_or_revert()
-        .into_hash()
+        .into_hash_addr()
         .map(ContractPackageHash::new)
         .unwrap_or_revert();
 
     // Get the access URef (required for upgrade permission)
-    let access_uref: URef = runtime::get_key(ACCESS_UREF_KEY)
+    let _access_uref: URef = runtime::get_key(ACCESS_UREF_KEY)
         .unwrap_or_revert()
         .into_uref()
         .unwrap_or_revert();
@@ -144,10 +145,12 @@ pub extern "C" fn call() {
     let named_keys = NamedKeys::new();
 
     // Add new version to existing package
+    // add_contract_version in 5.0 requires 4 arguments!
     let (contract_hash, contract_version) = storage::add_contract_version(
         package_hash,
         entry_points.into(),
         named_keys.into(),
+        Default::default(),  // message_topics
     );
 
     // Store the V2 contract hash
@@ -171,7 +174,7 @@ This is an **UPGRADE** template. You must:
 - \`reset\` - Reset counter to 0
 
 ## Upgrade Steps
-1. Get your \`counter_package\` hash from V1 deployment
+1. Get your \`counter_package\` hash from V1 deployment (check named keys on explorer)
 2. Select "Upgrade Contract" mode in Deploy Panel
 3. Enter the package hash
 4. Deploy with 200 CSPR
