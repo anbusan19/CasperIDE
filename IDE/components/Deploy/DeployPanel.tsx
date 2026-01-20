@@ -36,6 +36,60 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
   const [deployMode, setDeployMode] = useState<DeployMode>('fresh');
   const [contractPackageHash, setContractPackageHash] = useState('');
   const [upgradeHistory, setUpgradeHistory] = useState<ContractUpgrade[]>([]);
+  const [fetchingContractHash, setFetchingContractHash] = useState<string | null>(null);
+
+  // Function to refresh contract hash from account named keys
+  const refreshContractHash = async (contractId: string) => {
+    if (!wallet.connected || !wallet.publicKey) {
+      console.error('❌ ERROR: Please connect your wallet first');
+      return;
+    }
+
+    setFetchingContractHash(contractId);
+    try {
+      const namedKeys = await CasperDeploymentService.getAccountNamedKeys(wallet.publicKey, network);
+
+      // Look for common contract hash key names
+      const possibleKeys = ['counter_contract', 'contract_hash', 'contract'];
+      let contractHash = null;
+      let foundKey = null;
+
+      for (const key of possibleKeys) {
+        if (namedKeys[key]) {
+          contractHash = namedKeys[key];
+          foundKey = key;
+          break;
+        }
+      }
+
+      if (contractHash) {
+        // Update the contract in state
+        const updated = deployedContracts.map(c =>
+          c.id === contractId ? { ...c, contractHash } : c
+        );
+        setDeployedContracts(updated);
+        localStorage.setItem('caspier-deployed-contracts', JSON.stringify(updated));
+
+        console.log('='.repeat(50));
+        console.log('📋 CONTRACT HASH FOUND!');
+        console.log('='.repeat(50));
+        console.log(`Key Name: ${foundKey}`);
+        console.log(`Contract Hash: ${contractHash}`);
+        console.log('='.repeat(50));
+
+        // Alert removed - check console for output
+      } else {
+        const keys = Object.keys(namedKeys);
+        console.log('Available Named Keys:', keys);
+        console.warn('⚠️  Contract hash not found. Deploy may still be processing. Try again in 1-2 minutes.');
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch contract hash:', error);
+      // Error already logged to console
+    } finally {
+      setFetchingContractHash(null);
+    }
+  };
 
   useEffect(() => {
     // Load deployed contracts from localStorage
@@ -67,17 +121,17 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
 
   const handleDeploy = async () => {
     if (!compilationResult?.wasm) {
-      alert('No compiled WASM available. Please compile first.');
+      console.error('❌ ERROR: No compiled WASM available. Please compile first.');
       return;
     }
 
     if (!wallet.connected) {
-      alert('Please connect a wallet first');
+      console.error('❌ ERROR: Please connect a wallet first');
       return;
     }
 
     if (deployMode === 'upgrade' && !contractPackageHash.trim()) {
-      alert('Please enter a contract package hash for upgrade.');
+      console.error('❌ ERROR: Please enter a contract package hash for upgrade.');
       return;
     }
 
@@ -135,7 +189,7 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
         console.log('Explorer URL:', explorerUrl);
         console.log('='.repeat(50));
 
-        alert(`Upgrade successful!\n\nPackage Hash: ${contractPackageHash}\nNew Version: ${result.version || 'pending'}\nDeploy Hash: ${deployHashHex}\n\nView on Explorer:\n${explorerUrl}\n\n💡 Check your account's named keys on the explorer for the new contract hash!`);
+        // Success output already in console
       } else {
         // Fresh deployment
         result = await CasperDeploymentService.deploy(
@@ -162,15 +216,36 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
           onDeploySuccess(newContract);
         }
 
+        // Convert deploy hash to hex string if it's a Uint8Array
+        const deployHashHex = result.deployHash instanceof Uint8Array
+          ? Array.from(result.deployHash).map(b => b.toString(16).padStart(2, '0')).join('')
+          : result.deployHash;
+
         const explorerUrl = network === 'testnet'
-          ? `https://testnet.cspr.live/transaction/${result.deployHash}`
-          : `https://cspr.live/transaction/${result.deployHash}`;
-        alert(`Deploy successful!\nTransaction: ${result.deployHash}\n\nView on Explorer:\n${explorerUrl}`);
+          ? `https://testnet.cspr.live/deploy/${deployHashHex}`
+          : `https://cspr.live/deploy/${deployHashHex}`;
+
+        // Log deployment details to console
+        console.log('='.repeat(50));
+        console.log('🚀 CONTRACT DEPLOYMENT SUCCESSFUL');
+        console.log('='.repeat(50));
+        console.log('Deploy Hash:', deployHashHex);
+        console.log('Explorer URL:', explorerUrl);
+        console.log('');
+        console.log('📋 HOW TO FIND YOUR CONTRACT HASH:');
+        console.log('1. Wait 1-2 minutes for deploy to be processed');
+        console.log('2. Go to the explorer URL above');
+        console.log('3. Click your account address');
+        console.log('4. Look in "Named Keys" for "counter_contract"');
+        console.log('5. That hash is your Contract Hash!');
+        console.log('='.repeat(50));
+
+        // Success output already in console
         console.log('Explorer URL:', explorerUrl);
       }
     } catch (error: any) {
       console.error('Deployment error:', error);
-      alert(`${deployMode === 'upgrade' ? 'Upgrade' : 'Deployment'} failed: ${error.message}`);
+      // Error already logged to console
     } finally {
       setDeploying(false);
     }
@@ -356,11 +431,19 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
                           {deployHashStr}
                         </a>
                       </div>
-                      {contract.contractHash && contract.contractHash !== 'pending' && (
+                      {contract.contractHash && contract.contractHash !== 'pending' ? (
                         <div className="flex items-start gap-1">
                           <span>Contract Hash:</span>
-                          <span className="font-mono text-xs break-all">{contract.contractHash}</span>
+                          <span className="font-mono text-xs break-all text-green-400">{contract.contractHash}</span>
                         </div>
+                      ) : (
+                        <button
+                          onClick={() => refreshContractHash(contract.id)}
+                          disabled={fetchingContractHash === contract.id}
+                          className="mt-1 px-2 py-1 bg-caspier-red text-white text-xs rounded hover:bg-red-600 disabled:opacity-50"
+                        >
+                          {fetchingContractHash === contract.id ? '🔄 Fetching...' : '📋 Get Contract Hash'}
+                        </button>
                       )}
                       <div className="text-caspier-muted text-xs mt-1">
                         {new Date(contract.timestamp).toLocaleString()}

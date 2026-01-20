@@ -240,6 +240,13 @@ let hash = key.into_hash_addr();  // RENAMED to into_hash_addr()
 4. To return a value from entry point, use 'runtime::ret(CLValue::from_t(value).unwrap_or_revert())'.
 5. Always handle Option/Result with '.unwrap_or_revert()' or '.unwrap_or(default)'.
 
+## NEVER DO THIS (THESE ARE HALLUCINATIONS):
+- NEVER use 'version.value' or 'version.uref' - ContractVersion is just u32, not a struct!
+- NEVER use 'Key::into_uref' - use '.and_then(|key| key.into_uref())' closure syntax!
+- NEVER use 'Key::from(version.value)' - this doesn't exist!
+- 'storage::new_contract' returns '(ContractHash, ContractVersion)' where ContractVersion = u32
+- The access_uref is auto-created when you pass Some(access_uref_name) to new_contract
+
 ## VERIFIED WORKING V1 EXAMPLE (COPY THIS PATTERN):
 \`\`\`rust
 #![no_std]
@@ -411,8 +418,11 @@ pub extern "C" fn call() {
 - Named keys persist automatically - no need to re-insert counter
 - For V3, V4, etc. - just add more entry points to the V2 pattern
 
-When answering questions, prioritize these rules over any deprecated knowledge you may have.
-If asked to generate code, provide it in clean markdown blocks conforming strictly to the rules above.`;
+## FINAL INSTRUCTION (MOST IMPORTANT):
+When asked to generate V1 or V2+ contracts, you MUST copy the VERIFIED WORKING EXAMPLES above CHARACTER FOR CHARACTER.
+DO NOT improvise. DO NOT add your own "improvements". DO NOT use patterns not shown in the examples.
+The examples above COMPILE AND WORK. Your modifications will NOT compile.
+If you generate code that doesn't match the examples exactly, the user's code WILL FAIL.`;
 
 export const generatePerplexityResponse = async (
     message: string,
@@ -465,7 +475,7 @@ export const generatePerplexityResponse = async (
                 model: 'sonar-pro',  // Valid models: 'sonar', 'sonar-pro'
                 messages: messages,
                 max_tokens: 4096,
-                temperature: 0.2,
+                temperature: 0.0,  // Zero temperature for maximum determinism
                 stream: false
             })
         });

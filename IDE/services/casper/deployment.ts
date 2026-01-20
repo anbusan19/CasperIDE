@@ -233,4 +233,72 @@ export class CasperDeploymentService {
       throw new Error(`Failed to get deploy status: ${error.message}`);
     }
   }
+
+  /**
+   * Get account named keys (to retrieve contract hash after deployment)
+   * Uses RPC proxy to avoid CORS issues
+   */
+  static async getAccountNamedKeys(
+    publicKeyHex: string,
+    network: string = 'testnet'
+  ): Promise<Record<string, string>> {
+    try {
+      const publicKey = CLPublicKey.fromHex(publicKeyHex);
+      const accountHash = publicKey.toAccountHashStr();
+
+      // Use RPC proxy to query account state
+      const response = await fetch(this.RPC_PROXY, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'query_global_state',
+          params: {
+            state_identifier: null, // Latest state
+            key: accountHash,
+            path: []
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`RPC returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      const namedKeys: Record<string, string> = {};
+
+      // Parse named keys from RPC response
+      if (data?.result?.stored_value?.Account?.named_keys) {
+        for (const nk of data.result.stored_value.Account.named_keys) {
+          namedKeys[nk.name] = nk.key;
+        }
+      }
+
+      return namedKeys;
+    } catch (error: any) {
+      console.error('Failed to get account named keys:', error);
+      throw new Error(`Failed to get account named keys: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get contract hash from account by key name
+   */
+  static async getContractHash(
+    publicKeyHex: string,
+    keyName: string = 'counter_contract',
+    network: string = 'testnet'
+  ): Promise<string | null> {
+    try {
+      const namedKeys = await this.getAccountNamedKeys(publicKeyHex, network);
+      return namedKeys[keyName] || null;
+    } catch (error: any) {
+      console.error(`Failed to get contract hash for key "${keyName}":`, error);
+      return null;
+    }
+  }
 }
