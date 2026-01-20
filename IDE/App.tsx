@@ -794,6 +794,90 @@ function App() {
         }));
     };
 
+    // --- GitHub Integration ---
+    const handleGitHubClone = (clonedFiles: Record<string, string>, repoName: string) => {
+        // Convert cloned files to FileNode structure
+        const fileNodes: FileNode[] = [];
+        const nodeMap: Record<string, FileNode> = {};
+
+        for (const [path, content] of Object.entries(clonedFiles)) {
+            const parts = path.split('/');
+            let currentPath = '';
+
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                const isFile = i === parts.length - 1;
+                const pathKey = currentPath ? `${currentPath}/${part}` : part;
+
+                if (!nodeMap[pathKey]) {
+                    const extension = isFile ? part.split('.').pop()?.toLowerCase() : undefined;
+                    const language = isFile ? getLanguageFromExtension(extension || '') : undefined;
+
+                    const node: FileNode = {
+                        id: `clone-${pathKey}-${Date.now()}`,
+                        name: part,
+                        type: isFile ? 'file' : 'folder',
+                        content: isFile ? content : undefined,
+                        language,
+                        children: isFile ? undefined : []
+                    };
+
+                    nodeMap[pathKey] = node;
+
+                    if (i === 0) {
+                        fileNodes.push(node);
+                    } else {
+                        const parentPath = parts.slice(0, i).join('/');
+                        const parent = nodeMap[parentPath];
+                        if (parent && parent.children) {
+                            parent.children.push(node);
+                        }
+                    }
+                }
+
+                currentPath = pathKey;
+            }
+        }
+
+        if (fileNodes.length > 0) {
+            setHistory([fileNodes]);
+            setHistoryIndex(0);
+            setOpenFiles([]);
+            setActiveFileId(null);
+            setTerminalLines(prev => [
+                ...prev,
+                { id: Date.now().toString(), type: 'success', content: `Cloned repository: ${repoName}` }
+            ]);
+        }
+    };
+
+    const handleGitHubGistCreated = (url: string) => {
+        setTerminalLines(prev => [
+            ...prev,
+            { id: Date.now().toString(), type: 'success', content: `Gist created: ${url}` }
+        ]);
+    };
+
+    // Collect all file contents for gist
+    const collectWorkspaceFiles = (): Record<string, string> => {
+        const result: Record<string, string> = {};
+
+        const traverse = (nodes: FileNode[], prefix: string = '') => {
+            for (const node of nodes) {
+                const path = prefix ? `${prefix}/${node.name}` : node.name;
+                if (node.type === 'file' && node.content) {
+                    result[path] = node.content;
+                }
+                if (node.children) {
+                    traverse(node.children, path);
+                }
+            }
+        };
+
+        traverse(files);
+        return result;
+    };
+
     return (
         <div className="h-screen w-screen flex flex-col bg-caspier-black text-caspier-text overflow-hidden font-sans">
 
@@ -814,6 +898,9 @@ function App() {
                 toggleRightSidebar={toggleRightSidebar}
                 isTerminalVisible={isTerminalVisible}
                 toggleTerminal={toggleTerminal}
+                onGitHubClone={handleGitHubClone}
+                onGitHubGistCreated={handleGitHubGistCreated}
+                workspaceFiles={collectWorkspaceFiles()}
             />
 
             {/* Main Workspace */}
