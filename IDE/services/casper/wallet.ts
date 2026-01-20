@@ -76,7 +76,13 @@ export class WalletService {
           // Check if already connected
           const isConnected = await casperWallet.isConnected();
           if (isConnected) {
-            publicKey = await casperWallet.getActivePublicKey();
+            try {
+              publicKey = await casperWallet.getActivePublicKey();
+            } catch (err) {
+              // If failed (likely locked), request connection to prompt unlock
+              console.log('Wallet connected but locked, requesting connection...');
+              publicKey = await casperWallet.requestConnection();
+            }
           } else {
             // Request new connection
             publicKey = await casperWallet.requestConnection();
