@@ -12,6 +12,7 @@ import EditorTabs from './components/Layout/EditorTabs';
 import Header from './components/Layout/Header';
 import { Button } from './components/UI/Button';
 import { PlayIcon, BotIcon, RocketIcon } from './components/UI/Icons';
+import { DeploymentNotification } from './components/UI/DeploymentNotification';
 import { RustCompiler, AssemblyScriptCompiler } from './services/casper/compiler';
 import { WalletService } from './services/casper/wallet';
 import JSZip from 'jszip';
@@ -57,6 +58,9 @@ function App() {
         connected: false
     });
     const [deployedContracts, setDeployedContracts] = useState<DeployedContract[]>([]);
+    
+    // Deployment Notification State
+    const [notification, setNotification] = useState<{ deployHash: string; network: string } | null>(null);
 
     // Project Settings
     const [settings, setSettings] = useState<ProjectSettings>(DEFAULT_SETTINGS);
@@ -626,6 +630,12 @@ function App() {
             ...prev,
             { id: Date.now().toString(), type: 'success', content: `Contract deployed: ${deployHashStr}` },
         ]);
+        
+        // Show notification
+        setNotification({
+            deployHash: contract.deployHash,
+            network: contract.network
+        });
     };
 
     const handleLoadTemplate = (templateNodes: FileNode[]) => {
@@ -919,6 +929,15 @@ function App() {
                     <span>Caspier v1.2.0</span>
                 </div>
             </div>
+            
+            {/* Deployment Notification */}
+            {notification && (
+                <DeploymentNotification
+                    deployHash={notification.deployHash}
+                    network={notification.network}
+                    onClose={() => setNotification(null)}
+                />
+            )}
         </div>
     );
 }

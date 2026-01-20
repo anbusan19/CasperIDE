@@ -1,4 +1,5 @@
 import React from 'react';
+import { getIconForFile } from 'vscode-icons-js';
 
 export const FileIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -244,38 +245,97 @@ export interface SmartFileIconProps {
     className?: string;
 }
 
+// VSCode Icons CDN base URL (using jsDelivr for better reliability)
+const VSCodeIconsCDN = 'https://cdn.jsdelivr.net/gh/vscode-icons/vscode-icons@latest/icons';
+
+// Icons that are dark/black and need special handling in dark mode
+const darkIcons = [
+    'file_type_rust',
+    'rust',
+    'file_type_solidity',
+    'solidity',
+    'file_type_toml',
+    'toml'
+];
+
+// Hook to detect current theme
+const useTheme = (): 'dark' | 'light' => {
+    const [theme, setTheme] = React.useState<'dark' | 'light'>(() => {
+        const themeAttr = document.documentElement.getAttribute('data-theme');
+        return (themeAttr === 'light' || themeAttr === 'dark') ? themeAttr : 'dark';
+    });
+
+    React.useEffect(() => {
+        const observer = new MutationObserver(() => {
+            const themeAttr = document.documentElement.getAttribute('data-theme');
+            if (themeAttr === 'light' || themeAttr === 'dark') {
+                setTheme(themeAttr);
+            }
+        });
+
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-theme']
+        });
+
+        return () => observer.disconnect();
+    }, []);
+
+    return theme;
+};
+
 export const SmartFileIcon: React.FC<SmartFileIconProps> = ({ name, className }) => {
-    const ext = name.split('.').pop()?.toLowerCase();
+    const [iconError, setIconError] = React.useState(false);
+    const theme = useTheme();
+    const iconName = getIconForFile(name);
     
-    // Solidity
-    if (ext === 'sol') {
+    // If we have an icon name and no error, try to load it from CDN
+    if (iconName && iconName !== 'default_file.svg' && !iconError) {
+        const iconPath = `${VSCodeIconsCDN}/${iconName}`;
+        const iconBaseName = iconName.replace('.svg', '').toLowerCase();
+        
+        // Check if this is a dark icon that needs special handling
+        const isDarkIcon = darkIcons.some(darkIcon => 
+            iconBaseName.includes(darkIcon.toLowerCase())
+        );
+        
+        // Calculate filter based on theme and icon type
+        let filter = 'none';
+        if (theme === 'dark') {
+            if (isDarkIcon) {
+                // Invert dark icons in dark mode to make them visible
+                filter = 'invert(1) brightness(1.2)';
+            } else {
+                // Slightly brighten other icons in dark mode for better visibility
+                filter = 'brightness(1.1)';
+            }
+        } else {
+            // Light mode: keep icons as-is, but slightly adjust dark icons if needed
+            if (isDarkIcon) {
+                filter = 'brightness(0.95)'; // Slightly darken for better contrast
+            }
+        }
+        
         return (
-            <svg viewBox="0 0 32 32" className={className} fill="none">
-                <path d="M16 2L2 10.2L16 18.4L30 10.2L16 2Z" fill="#363636"/>
-                <path d="M16 2L2 10.2L16 18.4L30 10.2L16 2Z" stroke="#363636" strokeLinejoin="round"/>
-                <path d="M16 30L2 21.8L16 13.6L30 21.8L16 30Z" fill="#363636"/>
-                <path d="M16 30L2 21.8L16 13.6L30 21.8L16 30Z" stroke="#363636" strokeLinejoin="round"/>
-                <path d="M16 18.4L16 13.6" stroke="#363636" strokeLinejoin="round"/>
-            </svg>
+            <img 
+                src={iconPath} 
+                alt={name}
+                className={className}
+                style={{ 
+                    width: '1em', 
+                    height: '1em',
+                    objectFit: 'contain',
+                    display: 'block',
+                    filter: filter
+                }}
+                onError={() => {
+                    // Fallback to default icon if image fails to load
+                    setIconError(true);
+                }}
+            />
         );
     }
     
-    // JS/TS
-    if (ext === 'js' || ext === 'jsx') return <span className={`font-bold text-yellow-400 ${className}`}>JS</span>;
-    if (ext === 'ts' || ext === 'tsx') return <span className={`font-bold text-blue-400 ${className}`}>TS</span>;
-    
-    // JSON
-    if (ext === 'json') return <span className={`font-bold text-yellow-200 ${className}`}>{}</span>;
-
-    // MD
-    if (ext === 'md' || ext === 'txt') return <span className={`font-bold text-gray-400 ${className}`}>TXT</span>;
-
-    // Rust
-    if (ext === 'rs') return <span className={`font-bold text-orange-600 ${className}`}>RS</span>;
-
-    // TOML
-    if (ext === 'toml') return <span className={`font-bold text-gray-500 ${className}`}>CFG</span>;
-
-    // Default
+    // Default fallback
     return <FileIcon className={className} />;
 };
