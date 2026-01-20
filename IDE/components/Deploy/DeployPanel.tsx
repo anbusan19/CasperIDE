@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileNode, DeployConfig, WalletConnection, DeployedContract, CompilationResult, DeployMode, ContractUpgrade } from '../../types';
 import { CasperDeploymentService } from '../../services/casper/deployment';
+import { CasperContractCallService } from '../../services/casper/contractCall';
 import WalletConnectionComponent from './WalletConnection';
 import { Button } from '../UI/Button';
 import { RocketIcon } from '../UI/Icons';
@@ -37,6 +38,12 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
   const [contractPackageHash, setContractPackageHash] = useState('');
   const [upgradeHistory, setUpgradeHistory] = useState<ContractUpgrade[]>([]);
   const [fetchingContractHash, setFetchingContractHash] = useState<string | null>(null);
+
+  // Contract calling state
+  const [selectedContract, setSelectedContract] = useState<string>('');
+  const [entryPoint, setEntryPoint] = useState<string>('');
+  const [callArgs, setCallArgs] = useState<string>('{}');
+  const [calling, setCalling] = useState(false);
 
   // Function to refresh contract hash from account named keys
   const refreshContractHash = async (contractId: string) => {
@@ -88,6 +95,79 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
       // Error already logged to console
     } finally {
       setFetchingContractHash(null);
+    }
+  };
+
+  // Function to call a contract entry point
+  const handleCallContract = async () => {
+    if (!wallet.connected || !wallet.publicKey) {
+      console.error('❌ ERROR: Please connect your wallet first');
+      return;
+    }
+
+    if (!selectedContract) {
+      console.error('❌ ERROR: Please select or enter a contract hash');
+      return;
+    }
+
+    if (!entryPoint.trim()) {
+      console.error('❌ ERROR: Please enter an entry point name');
+      return;
+    }
+
+    setCalling(true);
+    try {
+      // Parse args JSON
+      let args = {};
+      try {
+        args = JSON.parse(callArgs);
+      } catch (e) {
+        throw new Error('Invalid JSON for arguments');
+      }
+
+      const config: DeployConfig = {
+        ...deployConfig,
+        chainName: network === 'testnet' ? 'casper-test' : 'casper',
+        paymentAmount: 2500000000, // 2.5 CSPR for contract calls
+      };
+
+      console.log('='.repeat(50));
+      console.log('📞 CALLING CONTRACT');
+      console.log('='.repeat(50));
+      console.log('Contract Hash:', selectedContract);
+      console.log('Entry Point:', entryPoint);
+      console.log('Arguments:', JSON.stringify(args, null, 2));
+      console.log('Gas Payment:', '2.5 CSPR');
+      console.log('='.repeat(50));
+
+      const result = await CasperContractCallService.callContractByHash(
+        selectedContract,
+        entryPoint,
+        args,
+        wallet,
+        config
+      );
+
+      const deployHashHex = result.deployHash;
+
+      const explorerUrl = network === 'testnet'
+        ? `https://testnet.cspr.live/deploy/${deployHashHex}`
+        : `https://cspr.live/deploy/${deployHashHex}`;
+
+      console.log('='.repeat(50));
+      console.log('✅ CONTRACT CALL SUCCESSFUL');
+      console.log('='.repeat(50));
+      console.log('Deploy Hash:', deployHashHex);
+      console.log('Explorer URL:', explorerUrl);
+      console.log('='.repeat(50));
+    } catch (error: any) {
+      console.error('='.repeat(50));
+      console.error('❌ CONTRACT CALL FAILED');
+      console.error('='.repeat(50));
+      console.error('Error:', error.message);
+      console.error('='.repeat(50));
+    } finally {
+      setCalling(false);
     }
   };
 
@@ -466,6 +546,74 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
               })}
             </div>
           )}
+        </div>
+
+        {/* Contract Interaction */}
+        <div className="pt-4 border-t border-caspier-border mt-4">
+          <div className="text-xs font-bold text-caspier-muted mb-2 uppercase">Interact with Contract</div>
+
+          {/* Contract Selector */}
+          <div className="mb-3">
+            <label className="text-xs text-caspier-muted mb-1 block">Contract Hash</label>
+            <select
+              value={selectedContract}
+              onChange={(e) => setSelectedContract(e.target.value)}
+              className="w-full bg-caspier-dark border border-caspier-border rounded px-2 py-1.5 text-xs text-caspier-text focus:outline-none focus:border-caspier-red"
+            >
+              <option value="">Select deployed contract...</option>
+              {deployedContracts
+                .filter(c => c.contractHash && c.contractHash !== 'pending')
+                .map(contract => (
+                  <option key={contract.id} value={contract.contractHash}>
+                    {contract.name} - {contract.contractHash?.substring(0, 20)}...
+                  </option>
+                ))}
+            </select>
+            <input
+              type="text"
+              value={selectedContract}
+              onChange={(e) => setSelectedContract(e.target.value)}
+              placeholder="Or paste contract hash here..."
+              className="w-full mt-2 bg-caspier-dark border border-caspier-border rounded px-2 py-1.5 text-xs text-caspier-text focus:outline-none focus:border-caspier-red font-mono"
+            />
+          </div>
+
+          {/* Entry Point */}
+          <div className="mb-3">
+            <label className="text-xs text-caspier-muted mb-1 block">Entry Point</label>
+            <input
+              type="text"
+              value={entryPoint}
+              onChange={(e) => setEntryPoint(e.target.value)}
+              placeholder="e.g., increment, get_count"
+              className="w-full bg-caspier-dark border border-caspier-border rounded px-2 py-1.5 text-xs text-caspier-text focus:outline-none focus:border-caspier-red"
+            />
+          </div>
+
+          {/* Runtime Args */}
+          <div className="mb-3">
+            <label className="text-xs text-caspier-muted mb-1 block">Arguments (JSON)</label>
+            <textarea
+              value={callArgs}
+              onChange={(e) => setCallArgs(e.target.value)}
+              placeholder='{"key": "value"}'
+              rows={3}
+              className="w-full bg-caspier-dark border border-caspier-border rounded px-2 py-1.5 text-xs text-caspier-text focus:outline-none focus:border-caspier-red font-mono resize-none"
+            />
+          </div>
+
+          {/* Call Button */}
+          <Button
+            onClick={handleCallContract}
+            disabled={calling || !wallet.connected || !selectedContract || !entryPoint}
+            className="w-full"
+          >
+            {calling ? '🔄 Calling...' : '📞 Call Contract'}
+          </Button>
+
+          <div className="text-xs text-caspier-muted mt-2 italic">
+            💡 Results will appear in the terminal below
+          </div>
         </div>
       </div>
     </div>
