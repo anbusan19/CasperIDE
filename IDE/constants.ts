@@ -28,9 +28,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-casper-contract = "3.0.0"
-casper-types = "3.0.0"
-wee_alloc = "0.4.5"
+casper-contract = "5.0"
+casper-types = "6.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "z"
 
 [lib]
 crate-type = ["cdylib"]`
@@ -53,20 +57,8 @@ compile_error!("target arch should be wasm32: compile with '--target wasm32-unkn
 
 extern crate alloc;
 
-use casper_contract::{
-    contract_api::{runtime, storage},
-};
+use casper_contract::contract_api::{runtime, storage};
 use casper_types::Key;
-
-// Use wee_alloc as the global allocator
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
-// Panic handler for no_std
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    loop {}
-}
 
 const COUNTER_KEY: &str = "counter";
 
@@ -93,12 +85,12 @@ pub extern "C" fn call() {
         language: 'markdown',
         content: `# Simple Counter Contract
 
-A basic Casper smart contract that initializes a counter to 0.
+A basic Casper 2.0 smart contract that initializes a counter to 0.
 
 ## Features
 - No runtime arguments required
 - Simple deployment
-- Uses casper-contract 3.0.0
+- Uses casper-contract 5.0 / casper-types 6.0
 
 ## Deploy
 1. Click "Compile" to build the WASM
