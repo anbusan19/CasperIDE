@@ -111,9 +111,25 @@ export class CasperWalletService {
             const { DeployUtil, CLPublicKey } = await import('casper-js-sdk');
 
             const deployJsonObj = DeployUtil.deployToJson(deploy);
-            const deployJson = JSON.stringify(deployJsonObj);
 
-            const response = await provider.sign(deployJson, wallet.publicKey);
+            console.log('Preparing to sign deploy:', deployJsonObj);
+
+            // Casper 2.0 Compatibility Fix:
+            // The wallet may expect the deploy object to be wrapped in a "deploy" key
+            // especially if using a legacy Client with a newer Wallet/Node.
+            let deployJsonString: string;
+
+            if (!deployJsonObj.deploy) {
+                console.log('Wrapping deploy object for Casper 2.0 compatibility...');
+                deployJsonString = JSON.stringify({ deploy: deployJsonObj });
+            } else {
+                deployJsonString = JSON.stringify(deployJsonObj);
+            }
+
+            console.log('Sending to wallet for signing...');
+            const response = await provider.sign(deployJsonString, wallet.publicKey);
+
+            console.log('Wallet response:', response);
 
             if (response.cancelled) {
                 throw new Error('User cancelled signing');

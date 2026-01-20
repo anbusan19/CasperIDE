@@ -45,6 +45,11 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
   const [callArgs, setCallArgs] = useState<string>('{}');
   const [calling, setCalling] = useState(false);
 
+  // Query state (free reads)
+  const [queryKeyName, setQueryKeyName] = useState<string>('count');
+  const [queryResult, setQueryResult] = useState<any>(null);
+  const [querying, setQuerying] = useState(false);
+
   // Function to refresh contract hash from account named keys
   const refreshContractHash = async (contractId: string) => {
     if (!wallet.connected || !wallet.publicKey) {
@@ -168,6 +173,41 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
       console.error('='.repeat(50));
     } finally {
       setCalling(false);
+    }
+  };
+
+  // Function to query contract state (free read, no gas)
+  const handleQueryState = async () => {
+    if (!selectedContract) {
+      console.error('❌ ERROR: Please select or enter a contract hash');
+      return;
+    }
+
+    if (!queryKeyName.trim()) {
+      console.error('❌ ERROR: Please enter a key name to query');
+      return;
+    }
+
+    setQuerying(true);
+    setQueryResult(null);
+    try {
+      const result = await CasperContractCallService.queryContractState(
+        selectedContract,
+        queryKeyName.trim()
+      );
+
+      setQueryResult(result);
+
+      console.log('='.repeat(50));
+      console.log('✅ QUERY RESULT');
+      console.log('='.repeat(50));
+      console.log(`${queryKeyName} =`, result.value);
+      console.log('='.repeat(50));
+    } catch (error: any) {
+      console.error('Query failed:', error.message);
+      setQueryResult({ error: error.message });
+    } finally {
+      setQuerying(false);
     }
   };
 
@@ -480,74 +520,6 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
             : (deployMode === 'upgrade' ? 'Upgrade Contract' : 'Deploy Contract')}
         </Button>
 
-        {/* Deployed Contracts */}
-        <div className="pt-4 border-t border-caspier-border mt-4">
-          <div className="text-xs font-bold text-caspier-muted mb-2 uppercase">Deployed Contracts</div>
-          {deployedContracts.length === 0 ? (
-            <div className="text-caspier-muted text-xs italic">No contracts deployed yet.</div>
-          ) : (
-            <div className="space-y-2">
-              {deployedContracts.map(contract => {
-                // Convert deployHash to hex string if it's a Uint8Array
-                const deployHashStr = typeof contract.deployHash === 'string'
-                  ? contract.deployHash
-                  : Array.from(contract.deployHash).map(b => b.toString(16).padStart(2, '0')).join('');
-
-                return (
-                  <div key={contract.id} className="p-2 bg-caspier-black border border-caspier-border rounded text-xs">
-                    <div className="text-caspier-text font-bold mb-1">{contract.name}</div>
-                    <div className="text-caspier-muted space-y-1">
-                      <div>Network: <span className="text-caspier-text">{contract.network}</span></div>
-                      <div className="flex items-start gap-1">
-                        <span>Deploy Hash:</span>
-                        <a
-                          href={contract.network === 'testnet'
-                            ? `https://testnet.cspr.live/transaction/${deployHashStr}`
-                            : `https://cspr.live/transaction/${deployHashStr}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono text-xs break-all text-caspier-red hover:underline"
-                        >
-                          {deployHashStr}
-                        </a>
-                      </div>
-                      {contract.contractHash && contract.contractHash !== 'pending' ? (
-                        <div className="flex items-start gap-1">
-                          <span>Contract Hash:</span>
-                          <span className="font-mono text-xs break-all text-green-400">{contract.contractHash}</span>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => refreshContractHash(contract.id)}
-                          disabled={fetchingContractHash === contract.id}
-                          className="mt-1 px-2 py-1 bg-caspier-red text-white text-xs rounded hover:bg-red-600 disabled:opacity-50"
-                        >
-                          {fetchingContractHash === contract.id ? '🔄 Fetching...' : '📋 Get Contract Hash'}
-                        </button>
-                      )}
-                      <div className="text-caspier-muted text-xs mt-1">
-                        {new Date(contract.timestamp).toLocaleString()}
-                      </div>
-                      {contract.entryPoints && contract.entryPoints.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-caspier-border">
-                          <div className="text-caspier-muted mb-1">Entry Points:</div>
-                          <div className="flex flex-wrap gap-1">
-                            {contract.entryPoints.map((ep, idx) => (
-                              <span key={idx} className="px-1.5 py-0.5 bg-caspier-dark border border-caspier-border rounded text-xs">
-                                {ep.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
         {/* Contract Interaction */}
         <div className="pt-4 border-t border-caspier-border mt-4">
           <div className="text-xs font-bold text-caspier-muted mb-2 uppercase">Interact with Contract</div>
@@ -614,6 +586,119 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
           <div className="text-xs text-caspier-muted mt-2 italic">
             💡 Results will appear in the terminal below
           </div>
+        </div>
+
+        {/* Query Contract State (Free Read) */}
+        <div className="pt-4 border-t border-caspier-border mt-4">
+          <div className="text-xs font-bold text-caspier-muted mb-2 uppercase">Query State (Free Read)</div>
+
+          <div className="mb-3">
+            <label className="text-xs text-caspier-muted mb-1 block">Key Name</label>
+            <input
+              type="text"
+              value={queryKeyName}
+              onChange={(e) => setQueryKeyName(e.target.value)}
+              placeholder="e.g., count"
+              className="w-full bg-caspier-dark border border-caspier-border rounded px-2 py-1.5 text-xs text-caspier-text focus:outline-none focus:border-caspier-red"
+            />
+          </div>
+
+          <Button
+            onClick={handleQueryState}
+            disabled={querying || !selectedContract || !queryKeyName.trim()}
+            className="w-full"
+          >
+            {querying ? '🔄 Querying...' : '🔍 Query State'}
+          </Button>
+
+          {queryResult && (
+            <div className="mt-3 p-2 bg-caspier-black border border-caspier-border rounded">
+              {queryResult.error ? (
+                <div className="text-red-400 text-xs">
+                  ❌ {queryResult.error}
+                </div>
+              ) : (
+                <div className="text-xs">
+                  <div className="text-caspier-muted mb-1">{queryKeyName} =</div>
+                  <div className="text-green-400 font-mono text-lg font-bold">
+                    {JSON.stringify(queryResult.value)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="text-xs text-caspier-muted mt-2 italic">
+            💡 No gas required - reads state directly from chain
+          </div>
+        </div>
+
+        {/* Deployed Contracts */}
+        <div className="pt-4 border-t border-caspier-border mt-4">
+          <div className="text-xs font-bold text-caspier-muted mb-2 uppercase">Deployed Contracts</div>
+          {deployedContracts.length === 0 ? (
+            <div className="text-caspier-muted text-xs italic">No contracts deployed yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {deployedContracts.map(contract => {
+                // Convert deployHash to hex string if it's a Uint8Array
+                const deployHashStr = typeof contract.deployHash === 'string'
+                  ? contract.deployHash
+                  : Array.from(contract.deployHash).map(b => b.toString(16).padStart(2, '0')).join('');
+
+                return (
+                  <div key={contract.id} className="p-2 bg-caspier-black border border-caspier-border rounded text-xs">
+                    <div className="text-caspier-text font-bold mb-1">{contract.name}</div>
+                    <div className="text-caspier-muted space-y-1">
+                      <div>Network: <span className="text-caspier-text">{contract.network}</span></div>
+                      <div className="flex items-start gap-1">
+                        <span>Deploy Hash:</span>
+                        <a
+                          href={contract.network === 'testnet'
+                            ? `https://testnet.cspr.live/transaction/${deployHashStr}`
+                            : `https://cspr.live/transaction/${deployHashStr}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs break-all text-caspier-red hover:underline"
+                        >
+                          {deployHashStr}
+                        </a>
+                      </div>
+                      {contract.contractHash && contract.contractHash !== 'pending' ? (
+                        <div className="flex items-start gap-1">
+                          <span>Contract Hash:</span>
+                          <span className="font-mono text-xs break-all text-green-400">{contract.contractHash}</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => refreshContractHash(contract.id)}
+                          disabled={fetchingContractHash === contract.id}
+                          className="mt-1 px-2 py-1 bg-caspier-red text-white text-xs rounded hover:bg-red-600 disabled:opacity-50"
+                        >
+                          {fetchingContractHash === contract.id ? '🔄 Fetching...' : '📋 Get Contract Hash'}
+                        </button>
+                      )}
+                      <div className="text-caspier-muted text-xs mt-1">
+                        {new Date(contract.timestamp).toLocaleString()}
+                      </div>
+                      {contract.entryPoints && contract.entryPoints.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-caspier-border">
+                          <div className="text-caspier-muted mb-1">Entry Points:</div>
+                          <div className="flex flex-wrap gap-1">
+                            {contract.entryPoints.map((ep, idx) => (
+                              <span key={idx} className="px-1.5 py-0.5 bg-caspier-dark border border-caspier-border rounded text-xs">
+                                {ep.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
