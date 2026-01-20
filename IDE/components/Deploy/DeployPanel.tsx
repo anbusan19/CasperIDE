@@ -700,6 +700,53 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
             </div>
           )}
         </div>
+
+        {/* Best Practices Tips */}
+        <div className="pt-4 border-t border-caspier-border mt-4">
+          <details className="group">
+            <summary className="text-xs font-bold text-caspier-muted mb-2 uppercase cursor-pointer flex items-center gap-2 hover:text-caspier-text">
+              <span className="group-open:rotate-90 transition-transform">▶</span>
+              💡 Best Practices Tips
+            </summary>
+            <div className="mt-2 space-y-2 text-xs">
+              <div className="p-2 bg-caspier-black border border-caspier-border rounded">
+                <div className="font-semibold text-green-400 mb-1">⚡ Gas Optimization</div>
+                <ul className="text-caspier-muted space-y-1 list-disc list-inside">
+                  <li>Keep WASM under 500KB for optimal gas costs</li>
+                  <li>Use <code className="bg-caspier-dark px-1 rounded">#![no_std]</code> to reduce size</li>
+                  <li>Enable LTO and set <code className="bg-caspier-dark px-1 rounded">codegen-units=1</code></li>
+                </ul>
+              </div>
+
+              <div className="p-2 bg-caspier-black border border-caspier-border rounded">
+                <div className="font-semibold text-blue-400 mb-1">💰 Purse Management</div>
+                <ul className="text-caspier-muted space-y-1 list-disc list-inside">
+                  <li>Creating a new purse costs 2.5 CSPR</li>
+                  <li>Reuse purses when possible to save gas</li>
+                  <li>Ensure proper access control on purses</li>
+                </ul>
+              </div>
+
+              <div className="p-2 bg-caspier-black border border-caspier-border rounded">
+                <div className="font-semibold text-yellow-400 mb-1">🧪 Testing</div>
+                <ul className="text-caspier-muted space-y-1 list-disc list-inside">
+                  <li>Always test on Testnet before Mainnet</li>
+                  <li>Use unit tests with casper-engine-test-support</li>
+                  <li>Test all entry points and edge cases</li>
+                </ul>
+              </div>
+
+              <div className="p-2 bg-caspier-black border border-caspier-border rounded">
+                <div className="font-semibold text-purple-400 mb-1">🔧 Contract Design</div>
+                <ul className="text-caspier-muted space-y-1 list-disc list-inside">
+                  <li>Add <code className="bg-caspier-dark px-1 rounded">init()</code> entry point for self-initialization</li>
+                  <li>Max transaction size: 1 MB</li>
+                  <li>Inline functions to reduce Wasm overhead</li>
+                </ul>
+              </div>
+            </div>
+          </details>
+        </div>
       </div>
     </div>
   );

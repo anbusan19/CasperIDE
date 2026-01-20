@@ -58,7 +58,7 @@ function App() {
         connected: false
     });
     const [deployedContracts, setDeployedContracts] = useState<DeployedContract[]>([]);
-    
+
     // Deployment Notification State
     const [notification, setNotification] = useState<{ deployHash: string; network: string } | null>(null);
 
@@ -494,14 +494,44 @@ function App() {
             setCompilationResult(result);
 
             if (result.success) {
+                // Calculate Wasm size with formatted display
+                const wasmBytes = result.wasm?.length || 0;
+                const wasmKB = (wasmBytes / 1024).toFixed(2);
+                const wasmMB = (wasmBytes / (1024 * 1024)).toFixed(2);
+
+                // Determine size status
+                let sizeStatus = '✅';
+                let sizeWarning = '';
+                if (wasmBytes > 1048576) { // > 1MB
+                    sizeStatus = '❌';
+                    sizeWarning = ' (EXCEEDS 1MB LIMIT - deployment will fail!)';
+                } else if (wasmBytes > 512000) { // > 500KB
+                    sizeStatus = '⚠️';
+                    sizeWarning = ' (Large - consider optimization)';
+                }
+
+                const sizeDisplay = wasmBytes > 1048576
+                    ? `${wasmMB} MB`
+                    : wasmBytes > 1024
+                        ? `${wasmKB} KB`
+                        : `${wasmBytes} bytes`;
+
                 setTerminalLines(prev => [
                     ...prev,
                     { id: Date.now().toString(), type: 'success', content: 'Compilation successful! WASM generated.' },
                 ]);
-                setOutputLines(prev => [...prev, `> Compilation completed successfully.`, `> WASM size: ${result.wasm?.length || 0} bytes`]);
+
+                setOutputLines(prev => [
+                    ...prev,
+                    `> Compilation completed successfully.`,
+                    `> ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+                    `> 📦 WASM Size: ${sizeDisplay} ${sizeStatus}${sizeWarning}`,
+                    `> ⚡ Optimizations: LTO=true, codegen-units=1, wasm-strip=applied`,
+                    `> ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+                ]);
 
                 if (result.metadata?.entryPoints) {
-                    setOutputLines(prev => [...prev, `> Entry points: ${result.metadata.entryPoints.map(ep => ep.name).join(', ')}`]);
+                    setOutputLines(prev => [...prev, `> 🔧 Entry points: ${result.metadata.entryPoints.map(ep => ep.name).join(', ')}`]);
                 }
             } else {
                 setTerminalLines(prev => [
@@ -630,7 +660,7 @@ function App() {
             ...prev,
             { id: Date.now().toString(), type: 'success', content: `Contract deployed: ${deployHashStr}` },
         ]);
-        
+
         // Show notification
         setNotification({
             deployHash: contract.deployHash,
@@ -929,7 +959,7 @@ function App() {
                     <span>Caspier v1.2.0</span>
                 </div>
             </div>
-            
+
             {/* Deployment Notification */}
             {notification && (
                 <DeploymentNotification

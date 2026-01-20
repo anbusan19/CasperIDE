@@ -1,4 +1,5 @@
 // Upgradeable Counter V1 - Casper 2.0 (casper-contract 5.0 + casper-types 6.0)
+// With self-initialization entry point following Casper best practices
 export const upgradeableCounterV1 = {
     'Cargo.toml': `[package]
 name = "upgradeable_counter"
@@ -28,13 +29,26 @@ use casper_contract::contract_api::{runtime, storage};
 use casper_contract::unwrap_or_revert::UnwrapOrRevert;
 use casper_types::{
     contracts::{EntryPoint, EntryPoints, NamedKeys},
-    EntryPointAccess, EntryPointType, CLType, Key, URef,
+    EntryPointAccess, EntryPointType, CLType, Key, URef, Parameter,
 };
 
 const COUNTER_KEY: &str = "counter";
+const INITIALIZED_KEY: &str = "initialized";
 
 fn get_entry_points() -> EntryPoints {
     let mut entry_points = EntryPoints::new();
+
+    // Self-initialization entry point (Best Practice)
+    // Can only be called once - prevents re-initialization
+    entry_points.add_entry_point(EntryPoint::new(
+        String::from("init"),
+        vec![
+            Parameter::new("initial_value", CLType::U64),
+        ],
+        CLType::Unit,
+        EntryPointAccess::Public,
+        EntryPointType::Called,
+    ));
 
     entry_points.add_entry_point(EntryPoint::new(
         String::from("increment"),
@@ -53,6 +67,28 @@ fn get_entry_points() -> EntryPoints {
     ));
 
     entry_points
+}
+
+/// Self-initialization entry point
+/// Best Practice: Initialize contract state without a subsequent deploy
+/// This can only be called once - subsequent calls will revert
+#[no_mangle]
+pub extern "C" fn init() {
+    // Check if already initialized
+    if runtime::has_key(INITIALIZED_KEY) {
+        runtime::revert(casper_types::ApiError::User(1)); // Already initialized
+    }
+    
+    // Get initial value from args (default to 0)
+    let initial_value: u64 = runtime::get_named_arg("initial_value");
+    
+    // Create the counter with initial value
+    let counter_uref = storage::new_uref(initial_value);
+    runtime::put_key(COUNTER_KEY, Key::URef(counter_uref));
+    
+    // Mark as initialized (prevents re-init)
+    let init_uref = storage::new_uref(true);
+    runtime::put_key(INITIALIZED_KEY, Key::URef(init_uref));
 }
 
 #[no_mangle]
@@ -79,6 +115,7 @@ pub extern "C" fn get_count() {
 
 #[no_mangle]
 pub extern "C" fn call() {
+    // Initialize counter to 0 by default (can be changed via init entry point)
     let counter_uref = storage::new_uref(0u64);
     let counter_key = Key::URef(counter_uref);
     
@@ -99,5 +136,25 @@ pub extern "C" fn call() {
 }`,
 
     'README.md': `# Upgradeable Counter V1 - Casper 2.0
+
+## Best Practices Included
+
+### Self-Initialization Entry Point
+This contract includes an \`init()\` entry point following Casper best practices:
+
+- **init(initial_value: U64)**: Initialize counter with a custom value
+  - Can only be called once (prevents re-initialization)
+  - Reduces gas by avoiding subsequent deploy
+
+### Entry Points
+- \`init(initial_value)\` - Initialize with custom value (one-time only)
+- \`increment()\` - Increment counter by 1
+- \`get_count()\` - Get current counter value
+
+### Optimizations Applied
+- \`#![no_std]\` - No standard library for smaller Wasm
+- \`lto = true\` - Link-time optimization
+- \`codegen-units = 1\` - Single codegen unit for better optimization
+- \`opt-level = "z"\` - Optimize for size
 `
 };
