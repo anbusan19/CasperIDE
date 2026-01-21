@@ -390,23 +390,29 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ currentCode, files, width, 
 
     return (
         <div style={{ width }} className="flex-shrink-0 bg-caspier-dark border-l border-caspier-border flex flex-col h-full relative">
-            <div className="p-3 border-b border-caspier-border flex items-center justify-between bg-caspier-black">
-                <div className="flex items-center gap-2">
-                    <BotIcon className="text-caspier-red w-5 h-5" />
-                    <span className="text-xs font-bold text-caspier-text tracking-wider">CASPIER ASSISTANT</span>
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-caspier-muted">Powered by</span>
-                        <img 
-                            src="/chaingpt-logoLight-Mono.svg" 
-                            alt="ChainGPT" 
-                            className="h-5"
-                            style={{
-                                filter: theme === 'light' ? 'invert(1)' : 'none'
-                            }}
-                        />
-                    </div>
+            <div className="p-3 border-b border-caspier-border flex items-center justify-between bg-caspier-black min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <BotIcon className="text-caspier-red w-5 h-5 flex-shrink-0" />
+                    {width >= 280 && (
+                        <span className="text-xs font-bold text-caspier-text tracking-wider whitespace-nowrap">
+                            CASPIER ASSISTANT
+                        </span>
+                    )}
+                    {width >= 360 && (
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="text-[10px] text-caspier-muted whitespace-nowrap">Powered by</span>
+                            <img 
+                                src="/chaingpt-logoLight-Mono.svg" 
+                                alt="ChainGPT" 
+                                className="h-5 flex-shrink-0"
+                                style={{
+                                    filter: theme === 'light' ? 'invert(1)' : 'none'
+                                }}
+                            />
+                        </div>
+                    )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                     <button onClick={onClose} className="text-caspier-muted hover:text-caspier-text">
                         <XIcon className="w-4 h-4" />
                     </button>

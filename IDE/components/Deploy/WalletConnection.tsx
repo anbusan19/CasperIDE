@@ -212,7 +212,7 @@ const WalletConnectionComponent: React.FC<WalletConnectionProps> = ({
       <div className="text-xs text-caspier-muted">
         <p>Connect your wallet to deploy contracts to Casper network.</p>
         <p className="mt-1 text-yellow-400">
-          ⚠️ Extension signing required for deployment. Manual entry is read-only.
+          Extension signing required for deployment. Manual entry is read-only.
         </p>
       </div>
     </div>

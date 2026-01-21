@@ -847,9 +847,13 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
         if (!wallet || !onWalletConnect || !onWalletDisconnect) {
             return (
                 <div className="flex flex-col h-full">
-                    <div className="p-3 border-b border-caspier-border flex items-center gap-2 bg-caspier-black">
-                        <RocketIcon className="w-4 h-4 text-caspier-muted" />
-                        <span className="text-xs font-bold text-caspier-text tracking-wider">DEPLOY & RUN TRANSACTIONS</span>
+                    <div className="p-3 border-b border-caspier-border flex items-center gap-2 bg-caspier-black min-w-0">
+                        <RocketIcon className="w-4 h-4 text-caspier-muted flex-shrink-0" />
+                        {width >= 280 && (
+                            <span className="text-xs font-bold text-caspier-text tracking-wider whitespace-nowrap">
+                                DEPLOY & RUN TRANSACTIONS
+                            </span>
+                        )}
                     </div>
                     <div className="flex-1 overflow-y-auto p-4">
                         <div className="text-caspier-muted text-sm">Deploy panel requires wallet integration.</div>
@@ -866,6 +870,7 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
                 onWalletDisconnect={onWalletDisconnect}
                 compilationResult={compilationResult}
                 onDeploySuccess={onDeploySuccess}
+                width={width}
             />
         );
     };

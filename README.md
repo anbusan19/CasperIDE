@@ -2,7 +2,7 @@
 
 **A Browser-Based Smart Contract Playground for the Casper Blockchain**
 
-[!Caspier](IDE/public/caspier-horizontal.svg)
+[!Caspier](caspierfrontend\public\Caspier-horizontal.png)
 
 ## Overview
 

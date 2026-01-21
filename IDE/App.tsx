@@ -83,6 +83,7 @@ function App() {
     // Layout State
     const [leftWidth, setLeftWidth] = useState(260);
     const [rightWidth, setRightWidth] = useState(320);
+    const [terminalHeight, setTerminalHeight] = useState(200);
     const [isLeftSidebarVisible, setIsLeftSidebarVisible] = useState(true);
     const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(true);
     const [isTerminalVisible, setIsTerminalVisible] = useState(true);
@@ -120,6 +121,31 @@ function App() {
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
     }, [leftWidth, rightWidth]);
+
+    // Terminal Resizing Logic
+    const startTerminalResizing = useCallback((mouseDownEvent: React.MouseEvent) => {
+        mouseDownEvent.preventDefault();
+        const startY = mouseDownEvent.clientY;
+        const startHeight = terminalHeight;
+
+        const doDrag = (mouseMoveEvent: MouseEvent) => {
+            const deltaY = startY - mouseMoveEvent.clientY; // Inverted because we're resizing from top
+            const newHeight = startHeight + deltaY;
+            setTerminalHeight(Math.max(100, Math.min(newHeight, 600)));
+        };
+
+        const stopDrag = () => {
+            document.removeEventListener('mousemove', doDrag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.body.style.cursor = 'default';
+            document.body.style.userSelect = 'auto';
+        };
+
+        document.addEventListener('mousemove', doDrag);
+        document.addEventListener('mouseup', stopDrag);
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+    }, [terminalHeight]);
 
     // Recursively find file by ID
     const findFile = (nodes: FileNode[], id: string): FileNode | null => {
@@ -1007,12 +1033,19 @@ function App() {
                     </div>
 
                     {isTerminalVisible && (
-                        <TerminalPanel
-                            terminalLines={terminalLines}
-                            outputLines={outputLines}
-                            problems={problems}
-                            height={200}
-                        />
+                        <>
+                            {/* Terminal Resizer */}
+                            <div
+                                className="h-1 bg-caspier-dark hover:bg-caspier-red cursor-row-resize z-10 transition-colors delay-150"
+                                onMouseDown={startTerminalResizing}
+                            />
+                            <TerminalPanel
+                                terminalLines={terminalLines}
+                                outputLines={outputLines}
+                                problems={problems}
+                                height={terminalHeight}
+                            />
+                        </>
                     )}
                 </div>
 
