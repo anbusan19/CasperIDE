@@ -1,27 +1,30 @@
 /**
- * Perplexity AI Service
- * Uses OpenAI-compatible API format
+ * ChainGPT Web3 LLM Service
+ * Uses ChainGPT's REST API for Web3-aware AI assistance
+ * API Docs: https://api.chaingpt.org/chat/stream
  */
 
-export type AIProvider = 'gemini' | 'perplexity';
+export type AIProvider = 'gemini' | 'chaingpt';
 
-interface PerplexityMessage {
-    role: 'system' | 'user' | 'assistant';
-    content: string;
+interface ChainGPTResponse {
+    status: boolean;
+    message: string;
+    data?: {
+        bot: string;
+    };
 }
 
-interface PerplexityResponse {
-    id: string;
-    model: string;
-    choices: {
-        index: number;
-        message: {
-            role: string;
-            content: string;
-        };
-        finish_reason: string;
-    }[];
-}
+// Generate a proper UUID v4 for session ID (required by ChainGPT)
+const generateUUID = (): string => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+};
+
+// Session ID for chat history persistence
+const SESSION_ID = generateUUID();
 
 const SYSTEM_PROMPT = `You are Caspier AI, an intelligent coding assistant embedded in a Casper Network IDE. 
 You are an expert in Rust (no_std), WebAssembly (WASM), Casper Smart Contracts, and the casper-js-sdk.
@@ -424,77 +427,92 @@ DO NOT improvise. DO NOT add your own "improvements". DO NOT use patterns not sh
 The examples above COMPILE AND WORK. Your modifications will NOT compile.
 If you generate code that doesn't match the examples exactly, the user's code WILL FAIL.`;
 
-export const generatePerplexityResponse = async (
+export const generateChainGPTResponse = async (
     message: string,
     contextCode: string,
     history: { role: 'user' | 'model'; parts: { text: string }[] }[]
 ): Promise<string> => {
-    const apiKey = process.env.PERPLEXITY_API_KEY;
+    const apiKey = process.env.CHAINGPT_API_KEY;
 
     if (!apiKey) {
-        return "Error: PERPLEXITY_API_KEY is missing. Please add it to your .env.local file.";
+        return "Error: CHAINGPT_API_KEY is missing. Please add it to your .env file.";
     }
 
     try {
-        // Sanitize history: Perplexity requires alternating User/Assistant roles, starting with User.
-        // We must remove any leading 'model' (assistant) messages, like the initial Welcome message.
-        let validHistory = [...history];
-        while (validHistory.length > 0 && validHistory[0].role === 'model') {
-            validHistory.shift();
-        }
+        // Build the full question with system context and user message
+        const fullQuestion = `${SYSTEM_PROMPT}
 
-        // Build messages array
-        const messages: PerplexityMessage[] = [
-            {
-                role: 'system',
-                content: `${SYSTEM_PROMPT}\n\nCurrent Code Context:\n\`\`\`\n${contextCode}\n\`\`\``
-            }
-        ];
+Current Code Context:
+\`\`\`
+${contextCode}
+\`\`\`
 
-        // Add sanitized history
-        validHistory.forEach(msg => {
-            messages.push({
-                role: msg.role === 'user' ? 'user' : 'assistant',
-                content: msg.parts[0].text
-            });
-        });
+User Question: ${message}`;
 
-        // Add current message
-        messages.push({
-            role: 'user',
-            content: message
-        });
+        // ChainGPT context injection for CasperIDE identity
+        const contextInjection = {
+            companyName: "CasperIDE",
+            companyDescription: "A Web3 IDE for Casper blockchain smart contract development. Supports Rust/WASM contracts with built-in compilation and deployment.",
+            purpose: "To assist developers with Casper smart contract development, code generation, debugging, and best practices.",
+            cryptoToken: true,
+            tokenInformation: {
+                tokenName: "Casper",
+                tokenSymbol: "CSPR",
+                blockchain: ["CASPER"]
+            },
+            aiTone: "PRE_SET_TONE",
+            selectedTone: "PROFESSIONAL"
+        };
 
-        const response = await fetch('https://api.perplexity.ai/chat/completions', {
+        const response = await fetch('https://api.chaingpt.org/chat/stream', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'sonar-pro',  // Valid models: 'sonar', 'sonar-pro'
-                messages: messages,
-                max_tokens: 4096,
-                temperature: 0.0,  // Zero temperature for maximum determinism
-                stream: false
+                model: 'general_assistant',
+                question: fullQuestion,
+                chatHistory: 'on',
+                sdkUniqueId: SESSION_ID,
+                useCustomContext: true,
+                contextInjection: contextInjection
             })
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Perplexity API Error:', response.status, errorText);
-            return `Error: Perplexity API returned ${response.status}. ${errorText}`;
+            console.error('ChainGPT API Error:', response.status, errorText);
+            return `Error: ChainGPT API returned ${response.status}. ${errorText}`;
         }
 
-        const data: PerplexityResponse = await response.json();
+        // The /chat/stream endpoint returns streamed text, not JSON
+        // Read the full response as text
+        const responseText = await response.text();
 
-        if (data.choices && data.choices.length > 0) {
-            return data.choices[0].message.content;
+        // Check if it's a JSON error response
+        if (responseText.startsWith('{')) {
+            try {
+                const data = JSON.parse(responseText) as ChainGPTResponse;
+                if (data.status && data.data?.bot) {
+                    return data.data.bot;
+                }
+                if (!data.status && data.message) {
+                    return `Error: ${data.message}`;
+                }
+            } catch {
+                // Not JSON, treat as raw text response
+            }
+        }
+
+        // Return the raw text response (streamed answer)
+        if (responseText && responseText.trim()) {
+            return responseText.trim();
         }
 
         return "No response generated.";
     } catch (error) {
-        console.error("Perplexity API Error:", error);
+        console.error("ChainGPT API Error:", error);
         return "I encountered an error processing your request. Please try again.";
     }
 };

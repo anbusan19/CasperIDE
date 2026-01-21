@@ -292,7 +292,7 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ currentCode, files, width, 
                 <div className="flex items-center gap-2">
                     <BotIcon className="text-caspier-red w-5 h-5" />
                     <span className="text-xs font-bold text-caspier-text tracking-wider">CASPIER ASSISTANT</span>
-                    <span className="text-[10px] text-purple-400 bg-purple-400/10 px-1.5 py-0.5 rounded border border-purple-400/20">Perplexity</span>
+                    <span className="text-[10px] text-purple-400 bg-purple-400/10 px-1.5 py-0.5 rounded border border-purple-400/20">ChainGPT</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={onClose} className="text-caspier-muted hover:text-caspier-text">

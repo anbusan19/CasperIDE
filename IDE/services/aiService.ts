@@ -1,22 +1,21 @@
 /**
  * Unified AI Service
- * Manages multiple AI providers (Gemini, Perplexity)
+ * Manages AI providers (ChainGPT Web3 LLM)
  */
 
-// import { generateChatResponse as generateGeminiResponse } from './geminiService'; // REMOVED
-import { generatePerplexityResponse, AIProvider } from './perplexityService';
+import { generateChainGPTResponse, AIProvider } from './chainGPTService';
 
-// Force Perplexity provider
-const getDefaultProvider = (): AIProvider => 'perplexity';
+// ChainGPT provider
+const getDefaultProvider = (): AIProvider => 'chaingpt';
 
 export type { AIProvider };
 
 export const getAvailableProviders = (): { id: AIProvider; name: string; available: boolean }[] => {
     return [
         {
-            id: 'perplexity',
-            name: 'Perplexity',
-            available: !!process.env.PERPLEXITY_API_KEY
+            id: 'chaingpt',
+            name: 'ChainGPT',
+            available: !!process.env.CHAINGPT_API_KEY
         }
     ];
 };
@@ -27,9 +26,9 @@ export const generateAIResponse = async (
     history: { role: 'user' | 'model'; parts: { text: string }[] }[],
     provider?: AIProvider
 ): Promise<string> => {
-    // Always use Perplexity
-    console.log(`🤖 Using AI Provider: Perplexity`);
-    return generatePerplexityResponse(message, contextCode, history);
+    // Use ChainGPT Web3 LLM
+    console.log(`🤖 Using AI Provider: ChainGPT`);
+    return generateChainGPTResponse(message, contextCode, history);
 };
 
 export { getDefaultProvider };

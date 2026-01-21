@@ -37,8 +37,8 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.PERPLEXITY_API_KEY': JSON.stringify(env.PERPLEXITY_API_KEY),
-      'process.env.AI_PROVIDER': JSON.stringify(env.AI_PROVIDER || 'perplexity'),
+      'process.env.CHAINGPT_API_KEY': JSON.stringify(env.CHAINGPT_API_KEY),
+      'process.env.AI_PROVIDER': JSON.stringify(env.AI_PROVIDER || 'chaingpt'),
     },
     resolve: {
       alias: {
