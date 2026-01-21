@@ -19,6 +19,7 @@ interface CodeBlockProps {
 
 const CodeBlock: React.FC<CodeBlockProps> = ({ language, content }) => {
     const [copied, setCopied] = useState(false);
+    const theme = useTheme();
 
     const handleCopy = () => {
         navigator.clipboard.writeText(content);
@@ -38,8 +39,8 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, content }) => {
                     {copied ? 'Copied' : 'Copy'}
                 </button>
             </div>
-            <div className="p-3 overflow-x-auto bg-[#0d0d0d]">
-                <pre className="text-xs font-mono text-caspier-text leading-relaxed tab-[2]">
+            <div className={`p-3 overflow-x-auto ${theme === 'dark' ? 'bg-[#0d0d0d]' : 'bg-gray-100'}`}>
+                <pre className={`text-xs font-mono leading-relaxed tab-[2] ${theme === 'dark' ? 'text-caspier-text' : 'text-gray-900'}`}>
                     {content.trim()}
                 </pre>
             </div>
@@ -47,7 +48,34 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, content }) => {
     );
 };
 
+// Hook to detect current theme
+const useTheme = (): 'dark' | 'light' => {
+    const [theme, setTheme] = React.useState<'dark' | 'light'>(() => {
+        const themeAttr = document.documentElement.getAttribute('data-theme');
+        return (themeAttr === 'light' || themeAttr === 'dark') ? themeAttr : 'dark';
+    });
+
+    React.useEffect(() => {
+        const observer = new MutationObserver(() => {
+            const themeAttr = document.documentElement.getAttribute('data-theme');
+            if (themeAttr === 'light' || themeAttr === 'dark') {
+                setTheme(themeAttr);
+            }
+        });
+
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-theme']
+        });
+
+        return () => observer.disconnect();
+    }, []);
+
+    return theme;
+};
+
 const SidebarRight: React.FC<SidebarRightProps> = ({ currentCode, files, width, onClose }) => {
+    const theme = useTheme();
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: 'welcome',
@@ -198,10 +226,11 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ currentCode, files, width, 
         setLoading(false);
     };
 
-    const formatInlineText = (text: string) => {
-        // Regex for Bold (**text**), Inline Code (`text`), and Mentions (@file)
-        const regex = /(\*\*[^*]+\*\*)|(`[^`]+`)|(@[a-zA-Z0-9_.-]+)/g;
-        const parts = [];
+    const formatInlineTextInline = (text: string) => {
+        // Regex for Bold (**text**), Italic (*text* or _text_), Inline Code (`text`), and Mentions (@file)
+        // Order matters: bold must come before italic to avoid conflicts
+        const regex = /(\*\*[^*]+\*\*)|(`[^`]+`)|(@[a-zA-Z0-9_.-]+)|(\*[^*]+\*)|(_[^_]+_)/g;
+        const parts: Array<{ type: string; content: string }> = [];
         let lastIndex = 0;
         let match;
 
@@ -217,6 +246,8 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ currentCode, files, width, 
                 parts.push({ type: 'inline-code', content: str.slice(1, -1) });
             } else if (str.startsWith('@')) {
                 parts.push({ type: 'mention', content: str.slice(1) });
+            } else if (str.startsWith('*') || str.startsWith('_')) {
+                parts.push({ type: 'italic', content: str.slice(1, -1) });
             }
 
             lastIndex = match.index + str.length;
@@ -227,6 +258,7 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ currentCode, files, width, 
 
         return parts.map((part, i) => {
             if (part.type === 'bold') return <strong key={i} className="text-caspier-text font-bold">{part.content}</strong>;
+            if (part.type === 'italic') return <em key={i} className="text-caspier-text italic">{part.content}</em>;
             if (part.type === 'inline-code') return <code key={i} className="bg-caspier-hover px-1.5 py-0.5 rounded text-caspier-red font-mono text-xs border border-caspier-border">{part.content}</code>;
             if (part.type === 'mention') {
                 const file = getAllFiles.find(f => f.name === part.content);
@@ -246,6 +278,76 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ currentCode, files, width, 
             }
             return <span key={i}>{part.content}</span>;
         });
+    };
+
+    const formatInlineText = (text: string) => {
+        // Split by lines to handle headers and lists
+        const lines = text.split('\n');
+        const result: React.ReactNode[] = [];
+
+        lines.forEach((line, lineIndex) => {
+            // Handle markdown headers
+            const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
+            if (headerMatch) {
+                const level = headerMatch[1].length;
+                const content = headerMatch[2];
+                const HeaderTag = `h${Math.min(level, 6)}` as keyof JSX.IntrinsicElements;
+                const sizeClasses = {
+                    1: 'text-xl font-bold mt-4 mb-2',
+                    2: 'text-lg font-bold mt-3 mb-2',
+                    3: 'text-base font-bold mt-3 mb-1',
+                    4: 'text-sm font-bold mt-2 mb-1',
+                    5: 'text-sm font-semibold mt-2 mb-1',
+                    6: 'text-xs font-semibold mt-1 mb-1'
+                };
+                result.push(
+                    <HeaderTag key={`header-${lineIndex}`} className={sizeClasses[level as keyof typeof sizeClasses] || 'text-base font-bold'}>
+                        {formatInlineTextInline(content)}
+                    </HeaderTag>
+                );
+                return;
+            }
+
+            // Handle unordered lists
+            if (line.match(/^[-*+]\s+/)) {
+                const content = line.replace(/^[-*+]\s+/, '');
+                result.push(
+                    <div key={`list-${lineIndex}`} className="flex items-start gap-2 my-1">
+                        <span className="text-caspier-muted mt-1">•</span>
+                        <span>{formatInlineTextInline(content)}</span>
+                    </div>
+                );
+                return;
+            }
+
+            // Handle ordered lists
+            const orderedListMatch = line.match(/^(\d+)\.\s+(.+)$/);
+            if (orderedListMatch) {
+                const number = orderedListMatch[1];
+                const content = orderedListMatch[2];
+                result.push(
+                    <div key={`olist-${lineIndex}`} className="flex items-start gap-2 my-1">
+                        <span className="text-caspier-muted mt-1">{number}.</span>
+                        <span>{formatInlineTextInline(content)}</span>
+                    </div>
+                );
+                return;
+            }
+
+            // Regular line - process inline formatting
+            if (line.trim()) {
+                result.push(
+                    <div key={`line-${lineIndex}`} className="my-1">
+                        {formatInlineTextInline(line)}
+                    </div>
+                );
+            } else {
+                // Empty line for spacing
+                result.push(<div key={`empty-${lineIndex}`} className="h-2" />);
+            }
+        });
+
+        return <>{result}</>;
     };
 
     const renderMessageContent = (text: string) => {
@@ -292,7 +394,17 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ currentCode, files, width, 
                 <div className="flex items-center gap-2">
                     <BotIcon className="text-caspier-red w-5 h-5" />
                     <span className="text-xs font-bold text-caspier-text tracking-wider">CASPIER ASSISTANT</span>
-                    <span className="text-[10px] text-purple-400 bg-purple-400/10 px-1.5 py-0.5 rounded border border-purple-400/20">ChainGPT</span>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-caspier-muted">Powered by</span>
+                        <img 
+                            src="/chaingpt-logoLight-Mono.svg" 
+                            alt="ChainGPT" 
+                            className="h-5"
+                            style={{
+                                filter: theme === 'light' ? 'invert(1)' : 'none'
+                            }}
+                        />
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={onClose} className="text-caspier-muted hover:text-caspier-text">
